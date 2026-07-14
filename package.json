@@ -1,0 +1,40 @@
+{
+  "name": "dudu-plan",
+  "version": "1.0.1",
+  "main": "index.ts",
+  "dependencies": {
+    "@expo/metro-runtime": "~57.0.3",
+    "@react-native-async-storage/async-storage": "2.2.0",
+    "expo": "~57.0.4",
+    "expo-haptics": "~57.0.0",
+    "expo-linear-gradient": "~57.0.0",
+    "expo-notifications": "~57.0.3",
+    "expo-status-bar": "~57.0.0",
+    "lucide-react-native": "^1.24.0",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "react-native": "0.86.0",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-svg": "15.15.4",
+    "react-native-web": "^0.21.2"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.2",
+    "sharp": "^0.35.3",
+    "tsx": "^4.23.1",
+    "typescript": "~6.0.3"
+  },
+  "scripts": {
+    "start": "expo start",
+    "start:lan": "expo start --lan",
+    "android": "expo start --android",
+    "ios": "expo start --ios",
+    "web": "expo start --web",
+    "typecheck": "node --stack-size=8192 ./node_modules/typescript/bin/tsc --noEmit",
+    "test": "tsx --test src/domain/dateTime.test.ts src/domain/progression.test.ts src/domain/bodyMetrics.test.ts",
+    "check": "npm run typecheck && npm run test",
+    "assets": "node scripts/generate-brand-assets.mjs",
+    "build:cloud:apk": "powershell -ExecutionPolicy Bypass -File scripts/build-cloud-apk.ps1"
+  },
+  "private": true
+}

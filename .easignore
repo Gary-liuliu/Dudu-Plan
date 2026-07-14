@@ -1,0 +1,15 @@
+node_modules/
+.expo/
+dist/
+web-build/
+builds/
+.android-sdk/
+android/
+ios/
+.claude/
+expo-*.log
+*.tsbuildinfo
+src/**/*.test.ts
+AGENTS.md
+CLAUDE.md
+README.md

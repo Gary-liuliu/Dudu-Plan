@@ -1,0 +1,46 @@
+{
+  "expo": {
+    "name": "嘟嘟计划",
+    "slug": "dudu-plan",
+    "owner": "egokaka",
+    "version": "1.0.1",
+    "orientation": "portrait",
+    "icon": "./assets/icon-dudu.png",
+    "scheme": "dudu-plan",
+    "userInterfaceStyle": "light",
+    "plugins": [
+      [
+        "expo-notifications",
+        {
+          "color": "#FF5A5F",
+          "defaultChannel": "workout-reminders"
+        }
+      ]
+    ],
+    "ios": {
+      "supportsTablet": false
+    },
+    "android": {
+      "package": "com.duduplan.app",
+      "versionCode": 2,
+      "permissions": [
+        "SCHEDULE_EXACT_ALARM"
+      ],
+      "adaptiveIcon": {
+        "backgroundColor": "#FF5A5F",
+        "foregroundImage": "./assets/android-icon-foreground-dudu.png",
+        "monochromeImage": "./assets/android-icon-monochrome-dudu.png"
+      },
+      "predictiveBackGestureEnabled": true
+    },
+    "web": {
+      "bundler": "metro",
+      "favicon": "./assets/favicon-dudu.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "b967fadf-a734-4e1b-9732-275442cca8e1"
+      }
+    }
+  }
+}
