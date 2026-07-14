@@ -18,3 +18,9 @@ export async function rescheduleWorkoutReminders(
 ): Promise<boolean> {
   return false;
 }
+
+export async function getObserverPushToken(): Promise<string | null> {
+  return null;
+}
+
+export async function unregisterObserverPushToken(): Promise<void> {}

@@ -47,6 +47,7 @@ function createSession(
     source,
     status,
     startedAt,
+    updatedAt: completedAt ?? startedAt,
     ...(completedAt ? { completedAt } : {}),
     currentExerciseIndex: 0,
     exerciseLogs: [],

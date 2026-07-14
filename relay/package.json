@@ -1,0 +1,24 @@
+{
+  "name": "dudu-plan-relay",
+  "version": "1.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "npm run typecheck && npm test",
+    "credentials": "node scripts/generate-credentials.mjs",
+    "deploy": "wrangler deploy",
+    "dev": "wrangler dev",
+    "secrets": "npm run secrets:auth && npm run secrets:token",
+    "secrets:auth": "node scripts/generate-credentials.mjs | wrangler secret put AUTH_CREDENTIALS",
+    "secrets:token": "node -e \"import('node:crypto').then(({ randomBytes }) => process.stdout.write(randomBytes(32).toString('base64url')))\" | wrangler secret put TOKEN_SECRET",
+    "test": "vitest run",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "@cloudflare/vitest-pool-workers": "0.18.4",
+    "@cloudflare/workers-types": "5.20260714.1",
+    "typescript": "^5.9.3",
+    "vitest": "4.1.10",
+    "wrangler": "4.110.0"
+  }
+}

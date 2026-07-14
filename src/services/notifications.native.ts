@@ -1,9 +1,11 @@
+import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
 import type { WorkoutKind } from '../types';
 
 const workoutReminderChannelId = 'workout-reminders';
+const observerUpdateChannelId = 'observer-updates';
 const defaultWorkoutHour = 19;
 const defaultWorkoutMinute = 30;
 const prepLeadMinutes = 10;
@@ -95,6 +97,16 @@ async function configureAndroidChannel(): Promise<void> {
     enableVibrate: true,
     vibrationPattern: [0, 250, 180, 250],
     lightColor: '#FF4D8D',
+    sound: 'default',
+    showBadge: false,
+  });
+  await Notifications.setNotificationChannelAsync(observerUpdateChannelId, {
+    name: '训练动态',
+    description: '嘟嘟开始和完成训练的实时通知',
+    importance: Notifications.AndroidImportance.HIGH,
+    enableVibrate: true,
+    vibrationPattern: [0, 250, 180, 250],
+    lightColor: '#7C5CFC',
     sound: 'default',
     showBadge: false,
   });
@@ -204,4 +216,28 @@ export async function rescheduleWorkoutReminders(
 ): Promise<boolean> {
   await cancelWorkoutReminders();
   return enabled ? scheduleWorkoutReminders(hour, minute) : false;
+}
+
+export async function getObserverPushToken(): Promise<string | null> {
+  const permissionGranted = await requestNotificationPermission();
+  if (!permissionGranted) {
+    return null;
+  }
+
+  const projectId =
+    Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
+  if (typeof projectId !== 'string' || projectId.length === 0) {
+    return null;
+  }
+
+  try {
+    const token = await Notifications.getExpoPushTokenAsync({ projectId });
+    return token.data;
+  } catch {
+    return null;
+  }
+}
+
+export async function unregisterObserverPushToken(): Promise<void> {
+  await Notifications.unregisterForNotificationsAsync();
 }

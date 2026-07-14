@@ -1,6 +1,8 @@
 import type { WorkoutKind, WorkoutTemplate } from '../types';
 
-export const workoutTemplates: WorkoutTemplate[] = [
+export const CURRENT_WORKOUT_TEMPLATE_VERSION = 2;
+
+const workoutTemplatesV1: WorkoutTemplate[] = [
   {
     kind: 'upper-a',
     title: '上肢 A · 胸背基础',
@@ -10,6 +12,7 @@ export const workoutTemplates: WorkoutTemplate[] = [
     exercises: [
       {
         id: 'dumbbell-bench-press',
+        section: 'strength',
         name: '哑铃平卧推举',
         focus: '胸肌、肱三头肌',
         sets: 4,
@@ -23,6 +26,7 @@ export const workoutTemplates: WorkoutTemplate[] = [
       },
       {
         id: 'one-arm-dumbbell-row',
+        section: 'strength',
         name: '单臂哑铃划船',
         focus: '背阔肌、中上背',
         sets: 4,
@@ -36,6 +40,7 @@ export const workoutTemplates: WorkoutTemplate[] = [
       },
       {
         id: 'seated-dumbbell-press',
+        section: 'strength',
         name: '坐姿哑铃推举',
         focus: '三角肌前束、中束',
         sets: 3,
@@ -48,6 +53,7 @@ export const workoutTemplates: WorkoutTemplate[] = [
       },
       {
         id: 'dumbbell-lateral-raise',
+        section: 'strength',
         name: '哑铃侧平举',
         focus: '三角肌中束',
         sets: 3,
@@ -60,6 +66,7 @@ export const workoutTemplates: WorkoutTemplate[] = [
       },
       {
         id: 'bent-over-reverse-fly',
+        section: 'strength',
         name: '俯身哑铃反向飞鸟',
         focus: '三角肌后束、上背',
         sets: 3,
@@ -72,6 +79,7 @@ export const workoutTemplates: WorkoutTemplate[] = [
       },
       {
         id: 'power-bar-bend',
+        section: 'strength',
         name: '臂力棒弯压',
         focus: '胸肌、前三角、手臂',
         sets: 2,
@@ -94,6 +102,7 @@ export const workoutTemplates: WorkoutTemplate[] = [
     exercises: [
       {
         id: 'goblet-squat',
+        section: 'strength',
         name: '哑铃高脚杯深蹲',
         focus: '股四头肌、臀肌',
         sets: 4,
@@ -106,6 +115,7 @@ export const workoutTemplates: WorkoutTemplate[] = [
       },
       {
         id: 'dumbbell-romanian-deadlift',
+        section: 'strength',
         name: '哑铃罗马尼亚硬拉',
         focus: '臀肌、大腿后侧',
         sets: 4,
@@ -119,6 +129,7 @@ export const workoutTemplates: WorkoutTemplate[] = [
       },
       {
         id: 'reverse-lunge',
+        section: 'strength',
         name: '哑铃反向箭步蹲',
         focus: '股四头肌、臀肌、单侧稳定',
         sets: 3,
@@ -132,6 +143,7 @@ export const workoutTemplates: WorkoutTemplate[] = [
       },
       {
         id: 'alternating-leg-lower',
+        section: 'core',
         name: '仰卧交替抬腿',
         focus: '腹直肌、髋屈肌控制',
         sets: 3,
@@ -146,6 +158,7 @@ export const workoutTemplates: WorkoutTemplate[] = [
       },
       {
         id: 'forearm-plank',
+        section: 'core',
         name: '平板支撑',
         focus: '核心抗伸展',
         sets: 3,
@@ -167,6 +180,7 @@ export const workoutTemplates: WorkoutTemplate[] = [
     exercises: [
       {
         id: 'neutral-grip-floor-press',
+        section: 'strength',
         name: '中立握哑铃地板卧推',
         focus: '胸肌、肱三头肌',
         sets: 4,
@@ -179,6 +193,7 @@ export const workoutTemplates: WorkoutTemplate[] = [
       },
       {
         id: 'dumbbell-pullover',
+        section: 'strength',
         name: '哑铃仰卧上拉',
         focus: '背阔肌、胸肌',
         sets: 3,
@@ -191,6 +206,7 @@ export const workoutTemplates: WorkoutTemplate[] = [
       },
       {
         id: 'wide-elbow-dumbbell-row',
+        section: 'strength',
         name: '宽肘单臂哑铃划船',
         focus: '中上背、三角肌后束',
         sets: 3,
@@ -204,6 +220,7 @@ export const workoutTemplates: WorkoutTemplate[] = [
       },
       {
         id: 'seated-dumbbell-press',
+        section: 'strength',
         name: '坐姿哑铃推举',
         focus: '三角肌前束、中束',
         sets: 3,
@@ -216,6 +233,7 @@ export const workoutTemplates: WorkoutTemplate[] = [
       },
       {
         id: 'dumbbell-lateral-raise',
+        section: 'strength',
         name: '哑铃侧平举',
         focus: '三角肌中束',
         sets: 3,
@@ -228,6 +246,7 @@ export const workoutTemplates: WorkoutTemplate[] = [
       },
       {
         id: 'power-bar-bend',
+        section: 'strength',
         name: '臂力棒弯压',
         focus: '胸肌、前三角、手臂',
         sets: 2,
@@ -250,6 +269,7 @@ export const workoutTemplates: WorkoutTemplate[] = [
     exercises: [
       {
         id: 'rear-foot-elevated-split-squat',
+        section: 'strength',
         name: '后脚抬高分腿蹲',
         focus: '股四头肌、臀肌、单侧稳定',
         sets: 4,
@@ -263,6 +283,7 @@ export const workoutTemplates: WorkoutTemplate[] = [
       },
       {
         id: 'staggered-stance-romanian-deadlift',
+        section: 'strength',
         name: '错步哑铃罗马尼亚硬拉',
         focus: '臀肌、大腿后侧、单侧稳定',
         sets: 3,
@@ -276,6 +297,7 @@ export const workoutTemplates: WorkoutTemplate[] = [
       },
       {
         id: 'dumbbell-glute-bridge',
+        section: 'strength',
         name: '哑铃臀桥',
         focus: '臀肌、髋伸展',
         sets: 3,
@@ -288,6 +310,7 @@ export const workoutTemplates: WorkoutTemplate[] = [
       },
       {
         id: 'standing-calf-raise',
+        section: 'strength',
         name: '站姿哑铃提踵',
         focus: '小腿后侧',
         sets: 3,
@@ -300,6 +323,7 @@ export const workoutTemplates: WorkoutTemplate[] = [
       },
       {
         id: 'dead-bug',
+        section: 'core',
         name: '死虫式',
         focus: '核心抗伸展、躯干控制',
         sets: 3,
@@ -313,6 +337,7 @@ export const workoutTemplates: WorkoutTemplate[] = [
       },
       {
         id: 'side-plank',
+        section: 'core',
         name: '侧平板支撑',
         focus: '侧向核心稳定',
         sets: 3,
@@ -329,10 +354,47 @@ export const workoutTemplates: WorkoutTemplate[] = [
   },
 ];
 
+const workoutTemplatesV2: WorkoutTemplate[] = workoutTemplatesV1.map((template) => ({
+  ...template,
+  exercises: template.exercises.map((exercise) => {
+    if (template.kind === 'lower-a' && exercise.id === 'forearm-plank') {
+      return { ...exercise, repMin: 45 };
+    }
+
+    if (template.kind !== 'lower-b' || exercise.id !== 'dead-bug') {
+      return { ...exercise };
+    }
+
+    return {
+      id: 'dumbbell-weighted-crunch',
+      section: 'core',
+      name: '哑铃负重卷腹',
+      focus: '腹直肌、躯干屈曲控制',
+      sets: 3,
+      repMin: 10,
+      repMax: 15,
+      repUnit: '次',
+      restSeconds: 60,
+      equipment: 'dumbbell',
+      tip: '哑铃贴近胸前，肋骨向骨盆靠拢，缓慢卷起和下放。',
+      warning: '重量按单只哑铃记录；腰部不适时减重或改为徒手卷腹。',
+    };
+  }),
+}));
+
+export const workoutTemplates = workoutTemplatesV2;
+
 export const workoutTemplatesByKind = Object.fromEntries(
   workoutTemplates.map((template) => [template.kind, template]),
 ) as Record<WorkoutKind, WorkoutTemplate>;
 
-export function getWorkoutTemplate(kind: WorkoutKind): WorkoutTemplate {
-  return workoutTemplatesByKind[kind];
+const workoutTemplatesV1ByKind = Object.fromEntries(
+  workoutTemplatesV1.map((template) => [template.kind, template]),
+) as Record<WorkoutKind, WorkoutTemplate>;
+
+export function getWorkoutTemplate(
+  kind: WorkoutKind,
+  version = CURRENT_WORKOUT_TEMPLATE_VERSION,
+): WorkoutTemplate {
+  return version === 1 ? workoutTemplatesV1ByKind[kind] : workoutTemplatesByKind[kind];
 }

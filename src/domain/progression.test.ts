@@ -17,6 +17,7 @@ const dumbbellExercise: ExerciseTemplate = {
   repUnit: '次',
   restSeconds: 120,
   equipment: 'dumbbell',
+  section: 'strength',
   tip: '保持动作稳定。',
 };
 

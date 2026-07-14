@@ -1,6 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 
-import type { AppData, UserProfile } from '../types';
+import type { AppData, UserProfile, WorkoutSession } from '../types';
 
 export const APP_DATA_STORAGE_KEY = '@dudu-plan/app-data/v1';
 
@@ -22,11 +22,28 @@ export const DEFAULT_PROFILE: UserProfile = {
 
 export function createDefaultAppData(): AppData {
   return {
-    version: 1,
+    version: 2,
     profile: { ...DEFAULT_PROFILE },
     sessions: [],
     nutritionByDate: {},
     weightRecords: [],
+  };
+}
+
+export function normalizeWorkoutSession(value: unknown): WorkoutSession | null {
+  if (!isRecord(value) || typeof value.startedAt !== 'string') {
+    return null;
+  }
+
+  const fallbackUpdatedAt =
+    typeof value.completedAt === 'string' ? value.completedAt : value.startedAt;
+
+  return {
+    ...(value as unknown as WorkoutSession),
+    updatedAt:
+      typeof value.updatedAt === 'string' ? value.updatedAt : fallbackUpdatedAt,
+    templateVersion:
+      typeof value.templateVersion === 'number' ? value.templateVersion : 1,
   };
 }
 
@@ -46,10 +63,12 @@ function normalizeAppData(value: unknown): AppData {
     : defaults.profile;
 
   return {
-    version: 1,
+    version: 2,
     profile,
     sessions: Array.isArray(value.sessions)
-      ? (value.sessions as AppData['sessions'])
+      ? value.sessions
+          .map(normalizeWorkoutSession)
+          .filter((session): session is WorkoutSession => session !== null)
       : [],
     nutritionByDate: isRecord(value.nutritionByDate)
       ? (value.nutritionByDate as AppData['nutritionByDate'])

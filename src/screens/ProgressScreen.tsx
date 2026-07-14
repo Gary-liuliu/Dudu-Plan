@@ -2,11 +2,14 @@ import {
   BellRing,
   ChevronLeft,
   ChevronRight,
+  LogOut,
+  Radio,
   Settings2,
   X,
 } from 'lucide-react-native';
 import { useMemo, useState } from 'react';
 import {
+  Alert,
   Modal,
   Pressable,
   ScrollView,
@@ -29,6 +32,8 @@ import {
 } from '../domain/dateTime';
 import { useAppStore } from '../state/AppStore';
 import { colors } from '../theme';
+import { useAccountStore } from '../state/AccountStore';
+import { useRealtimeStore } from '../state/RealtimeStore';
 import type { WorkoutSession } from '../types';
 
 const weekdayLabels = ['一', '二', '三', '四', '五', '六', '日'];
@@ -93,6 +98,8 @@ function sortCompletedSessions(sessions: WorkoutSession[]): WorkoutSession[] {
 // [Function] 展示完成训练的月历与历史。[Warning] 日期统一归属到 startedAt 对应的本地自然日。
 export function ProgressScreen() {
   const { data, updateProfile } = useAppStore();
+  const { logout, session } = useAccountStore();
+  const { observerConnected } = useRealtimeStore();
   const [displayedMonth, setDisplayedMonth] = useState(
     () => new Date(new Date().getFullYear(), new Date().getMonth(), 1, 12),
   );
@@ -248,7 +255,7 @@ export function ProgressScreen() {
           ) : (
             <View style={styles.sessionHistory}>
               {visibleSessions.map((session) => {
-                const template = getWorkoutTemplate(session.kind);
+                const template = getWorkoutTemplate(session.kind, session.templateVersion ?? 1);
                 const setSummary = getSessionSetSummary(session);
                 const durationSeconds = getWorkoutDurationSeconds(session);
                 const sessionDateKey = getSessionLocalDateKey(session);
@@ -347,6 +354,29 @@ export function ProgressScreen() {
                   thumbColor={colors.white}
                   trackColor={{ false: colors.line, true: colors.purple }}
                   value={data.profile.reminderEnabled}
+                />
+              </View>
+
+              <View style={styles.accountRow}>
+                <View style={styles.accountIcon}>
+                  <Radio color={observerConnected ? colors.teal : colors.inkMuted} size={21} strokeWidth={2.3} />
+                </View>
+                <View style={styles.reminderCopy}>
+                  <Text style={styles.reminderTitle}>{session?.accountName ?? '嘟嘟'}</Text>
+                  <Text style={styles.reminderText}>
+                    {observerConnected ? '肚肚已连接' : '肚肚未连接'}
+                  </Text>
+                </View>
+                <IconButton
+                  backgroundColor={colors.background}
+                  icon={LogOut}
+                  label="退出账号"
+                  onPress={() => {
+                    void logout().catch(() => {
+                      Alert.alert('退出失败', '无法清除本机登录状态，请稍后重试。');
+                    });
+                  }}
+                  size={38}
                 />
               </View>
             </ScrollView>
@@ -590,6 +620,23 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 10,
+  },
+  accountRow: {
+    minHeight: 70,
+    paddingTop: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    borderTopColor: colors.line,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  accountIcon: {
+    width: 38,
+    height: 38,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 8,
+    backgroundColor: colors.background,
   },
   reminderIcon: {
     width: 38,

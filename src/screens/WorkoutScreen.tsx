@@ -56,6 +56,11 @@ interface SetEditorProps {
   onComplete: () => void;
 }
 
+const exerciseSections: Array<{ key: ExerciseTemplate['section']; label: string }> = [
+  { key: 'strength', label: '力量训练' },
+  { key: 'core', label: '核心训练' },
+];
+
 function getSessionExerciseHistory(
   sessions: WorkoutSession[],
   exerciseId: string,
@@ -197,7 +202,7 @@ function ActiveWorkout({ session }: ActiveWorkoutProps) {
   const [nowMs, setNowMs] = useState(Date.now());
   const [showFinishModal, setShowFinishModal] = useState(false);
   const [showTechnique, setShowTechnique] = useState(false);
-  const template = getWorkoutTemplate(session.kind);
+  const template = getWorkoutTemplate(session.kind, session.templateVersion ?? 1);
   const exerciseIndex = Math.min(session.currentExerciseIndex, template.exercises.length - 1);
   const exercise = template.exercises[exerciseIndex];
   const exerciseLog = session.exerciseLogs.find((log) => log.exerciseId === exercise.id);
@@ -331,7 +336,9 @@ function ActiveWorkout({ session }: ActiveWorkoutProps) {
         </ScrollView>
 
         <View style={styles.exerciseHeading}>
-          <Text style={styles.exercisePosition}>动作 {exerciseIndex + 1} / {template.exercises.length}</Text>
+          <Text style={styles.exercisePosition}>
+            {exercise.section === 'core' ? '核心训练' : '力量训练'} · 动作 {exerciseIndex + 1} / {template.exercises.length}
+          </Text>
           <Text style={styles.exerciseTitle}>{exercise.name}</Text>
           <Text style={styles.exerciseTarget}>
             {exercise.sets} 组 × {exercise.repMin}-{exercise.repMax} {exercise.repUnit}{exercise.isPerSide ? ' / 侧' : ''} · 休息 {exercise.restSeconds} 秒
@@ -466,6 +473,14 @@ export function WorkoutScreen() {
   const now = new Date();
   const todayState = getTodayWorkoutState(now, data.sessions, data.profile);
   const selectedTemplate = getWorkoutTemplate(selectedKind);
+  const selectedExerciseSections = exerciseSections
+    .map((section) => ({
+      ...section,
+      exercises: selectedTemplate.exercises
+        .map((exercise, index) => ({ exercise, index }))
+        .filter(({ exercise }) => exercise.section === section.key),
+    }))
+    .filter((section) => section.exercises.length > 0);
   const isTodayPlan = todayState.template?.kind === selectedKind && !['completed', 'skipped'].includes(todayState.phase);
 
   return (
@@ -504,18 +519,22 @@ export function WorkoutScreen() {
       </ScrollView>
 
       <View style={styles.planExerciseList}>
-        <Text style={styles.planSectionTitle}>动作清单</Text>
-        {selectedTemplate.exercises.map((exercise, index) => (
-          <View key={exercise.id} style={styles.planExerciseRow}>
-            <View style={[styles.planExerciseIndex, { backgroundColor: `${selectedTemplate.accent}18` }]}>
-              <Text style={[styles.planExerciseIndexText, { color: selectedTemplate.accent }]}>{index + 1}</Text>
-            </View>
-            <View style={styles.planExerciseCopy}>
-              <Text style={styles.planExerciseName}>{exercise.name}</Text>
-              <Text style={styles.planExerciseMeta}>
-                {exercise.sets} × {exercise.repMin}-{exercise.repMax}{exercise.repUnit}{exercise.isPerSide ? '/侧' : ''} · {exercise.focus}
-              </Text>
-            </View>
+        {selectedExerciseSections.map((section) => (
+          <View key={section.key} style={styles.planExerciseSection}>
+            <Text style={styles.planSectionTitle}>{section.label}</Text>
+            {section.exercises.map(({ exercise, index }) => (
+              <View key={exercise.id} style={styles.planExerciseRow}>
+                <View style={[styles.planExerciseIndex, { backgroundColor: `${selectedTemplate.accent}18` }]}>
+                  <Text style={[styles.planExerciseIndexText, { color: selectedTemplate.accent }]}>{index + 1}</Text>
+                </View>
+                <View style={styles.planExerciseCopy}>
+                  <Text style={styles.planExerciseName}>{exercise.name}</Text>
+                  <Text style={styles.planExerciseMeta}>
+                    {exercise.sets} × {exercise.repMin}-{exercise.repMax}{exercise.repUnit}{exercise.isPerSide ? '/侧' : ''} · {exercise.focus}
+                  </Text>
+                </View>
+              </View>
+            ))}
           </View>
         ))}
       </View>
@@ -963,11 +982,15 @@ const styles = StyleSheet.create({
   planExerciseList: {
     paddingHorizontal: 20,
     paddingTop: 24,
+    gap: 22,
+  },
+  planExerciseSection: {
+    gap: 2,
   },
   planSectionTitle: {
-    marginBottom: 8,
+    marginBottom: 4,
     color: colors.ink,
-    fontSize: 18,
+    fontSize: 15,
     fontWeight: '900',
     letterSpacing: 0,
   },

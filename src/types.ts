@@ -1,5 +1,11 @@
 export type AppTab = 'home' | 'workout' | 'nutrition' | 'progress';
 
+export type AppRole = 'owner' | 'observer';
+
+export type AccountName = '嘟嘟' | '肚肚';
+
+export type RealtimeConnectionState = 'connecting' | 'online' | 'offline';
+
 export type WorkoutKind = 'upper-a' | 'lower-a' | 'upper-b' | 'lower-b';
 
 export type RepUnit = '次' | '秒';
@@ -16,6 +22,7 @@ export interface ExerciseTemplate {
   repUnit: RepUnit;
   restSeconds: number;
   equipment: ExerciseEquipment;
+  section: 'strength' | 'core';
   isPerSide?: boolean;
   tip: string;
   warning?: string;
@@ -59,6 +66,7 @@ export interface WorkoutSession {
   source: 'scheduled' | 'makeup';
   status: 'in_progress' | 'completed' | 'skipped';
   startedAt: string;
+  updatedAt: string;
   completedAt?: string;
   currentExerciseIndex: number;
   exerciseLogs: ExerciseLog[];
@@ -101,11 +109,26 @@ export interface UserProfile {
 }
 
 export interface AppData {
-  version: 1;
+  version: 2;
   profile: UserProfile;
   sessions: WorkoutSession[];
   nutritionByDate: Record<string, DailyNutritionLog>;
   weightRecords: WeightRecord[];
+}
+
+export interface AuthSession {
+  accountName: AccountName;
+  role: AppRole;
+  accessToken: string;
+  refreshToken: string;
+  accessTokenExpiresAt: number;
+  refreshTokenExpiresAt: number;
+}
+
+export interface ObserverCache {
+  version: 1;
+  sessions: WorkoutSession[];
+  lastSyncedAt: string | null;
 }
 
 export interface ProgressionSuggestion {

@@ -9,7 +9,10 @@ import {
   useState,
 } from 'react';
 
-import { getWorkoutTemplate } from '../data/workoutPlan';
+import {
+  CURRENT_WORKOUT_TEMPLATE_VERSION,
+  getWorkoutTemplate,
+} from '../data/workoutPlan';
 import {
   createDefaultAppData,
   loadAppData,
@@ -99,7 +102,10 @@ function updateSession(
     }
 
     foundSession = true;
-    return update(session);
+    const updatedSession = update(session);
+    return updatedSession === session
+      ? session
+      : { ...updatedSession, updatedAt: new Date().toISOString() };
   });
 
   return foundSession ? { ...data, sessions } : data;
@@ -221,13 +227,15 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
 
       const template = getWorkoutTemplate(kind);
       const existingSessions = dataRef.current.sessions;
+      const startedAt = new Date().toISOString();
       const session: WorkoutSession = {
         id: createLocalId('workout'),
         scheduledDate,
         kind,
         source,
         status: 'in_progress',
-        startedAt: new Date().toISOString(),
+        startedAt,
+        updatedAt: startedAt,
         currentExerciseIndex: 0,
         exerciseLogs: template.exercises.map((exercise) => {
           const previousLog = findLatestCompletedExerciseLog(existingSessions, exercise.id);
@@ -251,7 +259,7 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
             })),
           };
         }),
-        templateVersion: 1,
+        templateVersion: CURRENT_WORKOUT_TEMPLATE_VERSION,
       };
 
       commitData((current) => ({
