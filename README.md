@@ -45,7 +45,7 @@ npm.cmd --prefix relay run credentials
 在 `relay/.dev.vars` 中配置本地 Secret，该文件已被 Git 忽略：
 
 ```dotenv
-AUTH_CREDENTIALS={"version":1,"algorithm":"PBKDF2-SHA-256","iterations":210000,"accounts":{...}}
+AUTH_CREDENTIALS={"version":1,"algorithm":"PBKDF2-SHA-256","iterations":100000,"accounts":{...}}
 TOKEN_SECRET=至少32个随机字符
 ```
 

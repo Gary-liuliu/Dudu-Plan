@@ -46,7 +46,17 @@ async function handleLogin(request: Request, env: Env): Promise<Response> {
     return jsonResponse({ error: "invalid_request" }, 400);
   }
 
-  const role = await verifyCredentials(env.AUTH_CREDENTIALS, body.username, body.password);
+  let role: Awaited<ReturnType<typeof verifyCredentials>>;
+  try {
+    role = await verifyCredentials(env.AUTH_CREDENTIALS, body.username, body.password);
+  } catch (error) {
+    return jsonResponse({
+      error:
+        error instanceof Error && error.message === "invalid_credentials_secret"
+          ? "auth_configuration_invalid"
+          : "auth_runtime_error",
+    }, 503);
+  }
   if (!role) {
     return jsonResponse({ error: "invalid_credentials" }, 401);
   }

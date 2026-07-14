@@ -8,9 +8,7 @@
     "credentials": "node scripts/generate-credentials.mjs",
     "deploy": "wrangler deploy",
     "dev": "wrangler dev",
-    "secrets": "npm run secrets:auth && npm run secrets:token",
-    "secrets:auth": "node scripts/generate-credentials.mjs | wrangler secret put AUTH_CREDENTIALS",
-    "secrets:token": "node -e \"import('node:crypto').then(({ randomBytes }) => process.stdout.write(randomBytes(32).toString('base64url')))\" | wrangler secret put TOKEN_SECRET",
+    "secrets": "node scripts/provision-secrets.mjs",
     "test": "vitest run",
     "typecheck": "tsc --noEmit"
   },

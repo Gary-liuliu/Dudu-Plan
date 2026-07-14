@@ -13,7 +13,7 @@ npm.cmd run check
 Create `.dev.vars` for local development. Never commit this file:
 
 ```dotenv
-AUTH_CREDENTIALS={"version":1,"algorithm":"PBKDF2-SHA-256","iterations":210000,"accounts":{...}}
+AUTH_CREDENTIALS={"version":1,"algorithm":"PBKDF2-SHA-256","iterations":100000,"accounts":{...}}
 TOKEN_SECRET=replace-with-at-least-32-random-characters
 ```
 

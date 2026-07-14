@@ -39,9 +39,7 @@ function parseCredentials(rawCredentials: string): CredentialSet {
   if (
     parsed.version !== 1 ||
     parsed.algorithm !== "PBKDF2-SHA-256" ||
-    !Number.isInteger(parsed.iterations) ||
-    (parsed.iterations ?? 0) < 100_000 ||
-    (parsed.iterations ?? 0) > 2_000_000 ||
+    parsed.iterations !== 100_000 ||
     !parsed.accounts?.owner ||
     !parsed.accounts.observer
   ) {

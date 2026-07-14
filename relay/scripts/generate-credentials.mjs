@@ -1,6 +1,7 @@
 import { pbkdf2, randomBytes } from "node:crypto";
+import { pathToFileURL } from "node:url";
 
-const ITERATIONS = 210_000;
+const ITERATIONS = 100_000;
 const accounts = [
   ["owner", "嘟嘟"],
   ["observer", "肚肚"],
@@ -83,21 +84,27 @@ async function createRecord(username) {
   };
 }
 
-async function main() {
+export async function generateCredentials() {
   const records = {};
   for (const [role, username] of accounts) {
     records[role] = await createRecord(username);
   }
-  const credentials = {
+  return {
     version: 1,
     algorithm: "PBKDF2-SHA-256",
     iterations: ITERATIONS,
     accounts: records,
   };
+}
+
+async function main() {
+  const credentials = await generateCredentials();
   process.stdout.write(`${JSON.stringify(credentials)}\n`);
 }
 
-main().catch((error) => {
-  process.stderr.write(`${error.message}\n`);
-  process.exitCode = 1;
-});
+if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
+  main().catch((error) => {
+    process.stderr.write(`${error.message}\n`);
+    process.exitCode = 1;
+  });
+}
