@@ -39,7 +39,9 @@
     "relay:dev": "npm --prefix relay run dev",
     "relay:deploy": "npm --prefix relay run deploy",
     "assets": "node scripts/generate-brand-assets.mjs",
-    "build:cloud:apk": "powershell -ExecutionPolicy Bypass -File scripts/build-cloud-apk.ps1"
+    "build:cloud:apk": "powershell -ExecutionPolicy Bypass -File scripts/build-cloud-apk.ps1",
+    "local:android:setup": "powershell -ExecutionPolicy Bypass -File scripts/setup-local-android-build.ps1",
+    "build:local:apk": "powershell -ExecutionPolicy Bypass -File scripts/build-local-apk.ps1"
   },
   "private": true
 }

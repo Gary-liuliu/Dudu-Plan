@@ -3,6 +3,7 @@ node_modules/
 dist/
 web-build/
 builds/
+.local-build/
 .android-sdk/
 android/
 ios/

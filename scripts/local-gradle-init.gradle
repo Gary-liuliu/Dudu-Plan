@@ -1,0 +1,24 @@
+// [Script] Prefers domestic Maven mirrors. [Warning] Official repositories remain available as compatibility fallbacks.
+beforeSettings { settings ->
+  settings.pluginManagement.repositories {
+    maven { url = 'https://maven.aliyun.com/repository/gradle-plugin' }
+    maven { url = 'https://maven.aliyun.com/repository/google' }
+    maven { url = 'https://maven.aliyun.com/repository/public' }
+  }
+  settings.dependencyResolutionManagement.repositories {
+    maven { url = 'https://maven.aliyun.com/repository/google' }
+    maven { url = 'https://maven.aliyun.com/repository/public' }
+  }
+}
+
+gradle.beforeProject { project ->
+  project.buildscript.repositories {
+    maven { url = 'https://maven.aliyun.com/repository/gradle-plugin' }
+    maven { url = 'https://maven.aliyun.com/repository/google' }
+    maven { url = 'https://maven.aliyun.com/repository/public' }
+  }
+  project.repositories {
+    maven { url = 'https://maven.aliyun.com/repository/google' }
+    maven { url = 'https://maven.aliyun.com/repository/public' }
+  }
+}
