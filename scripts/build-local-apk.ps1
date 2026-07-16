@@ -9,6 +9,7 @@ param(
 $ErrorActionPreference = 'Stop'
 $projectRoot = (Resolve-Path (Join-Path $PSScriptRoot '..')).Path
 . (Join-Path $PSScriptRoot 'use-local-android-env.ps1')
+$env:NODE_ENV = if ($Variant -eq 'release') { 'production' } else { 'development' }
 
 Push-Location $projectRoot
 try {
@@ -39,10 +40,63 @@ try {
   $sdkPathForGradle = $env:ANDROID_SDK_ROOT.Replace('\', '\\').Replace(':', '\:')
   [IO.File]::WriteAllText((Join-Path $androidDirectory 'local.properties'), "sdk.dir=$sdkPathForGradle`n")
 
+  if ($Variant -eq 'release') {
+    $credentialsRoot = Join-Path $env:DUDU_LOCAL_BUILD_ROOT 'credentials-export'
+    $credentialsJsonPath = Join-Path $credentialsRoot 'credentials.json'
+    if (-not (Test-Path $credentialsJsonPath)) {
+      throw "EAS Android signing credentials are missing from the project-local build environment."
+    }
+
+    $credentials = Get-Content -Raw $credentialsJsonPath | ConvertFrom-Json
+    $keystoreConfiguration = $credentials.android.keystore
+    $keystoreSource = Join-Path $credentialsRoot $keystoreConfiguration.keystorePath
+    $keystoreDestination = Join-Path $androidDirectory 'app\eas-keystore.jks'
+    Copy-Item -LiteralPath $keystoreSource -Destination $keystoreDestination -Force
+
+    $escapeGroovyValue = {
+      param([string]$value)
+      return $value.Replace('\', '\\').Replace("'", "\'")
+    }
+    $keystorePassword = & $escapeGroovyValue $keystoreConfiguration.keystorePassword
+    $keyAlias = & $escapeGroovyValue $keystoreConfiguration.keyAlias
+    $keyPasswordValue = if ([string]::IsNullOrEmpty($keystoreConfiguration.keyPassword)) {
+      $keystoreConfiguration.keystorePassword
+    } else {
+      $keystoreConfiguration.keyPassword
+    }
+    $keyPassword = & $escapeGroovyValue $keyPasswordValue
+
+    $appBuildGradlePath = Join-Path $androidDirectory 'app\build.gradle'
+    $appBuildGradle = [IO.File]::ReadAllText($appBuildGradlePath)
+    $releaseBuildTypePattern = [regex]'(?ms)(buildTypes\s*\{.*?release\s*\{.*?)(signingConfig\s+signingConfigs\.debug)'
+    $appBuildGradle = $releaseBuildTypePattern.Replace($appBuildGradle, '${1}signingConfig signingConfigs.release', 1)
+
+    $signingConfigsPattern = [regex]'(?ms)(^\s*signingConfigs\s*\{\s*debug\s*\{.*?^\s*\}\s*)(^\s*\})'
+    $appBuildGradle = $signingConfigsPattern.Replace($appBuildGradle, {
+      param($match)
+      $releaseSigningConfiguration = @"
+        release {
+            storeFile file('eas-keystore.jks')
+            storePassword '$keystorePassword'
+            keyAlias '$keyAlias'
+            keyPassword '$keyPassword'
+        }
+"@
+      return $match.Groups[1].Value + $releaseSigningConfiguration + "`n" + $match.Groups[2].Value
+    }, 1)
+
+    if ($appBuildGradle -notmatch 'signingConfig\s+signingConfigs\.release') {
+      throw "Failed to configure the generated Android project with EAS release signing."
+    }
+    [IO.File]::WriteAllText($appBuildGradlePath, $appBuildGradle)
+  }
+
   $gradleWrapper = Join-Path $androidDirectory 'gradlew.bat'
   $gradleInitScript = Join-Path $PSScriptRoot 'local-gradle-init.gradle'
+  $localUserHomeForJava = $env:USERPROFILE.Replace('\', '/')
+  $kotlinDaemonDirectoryForJava = $env:DUDU_KOTLIN_DAEMON_DIRECTORY.Replace('\', '/')
   $gradleTask = if ($Variant -eq 'release') { 'app:assembleRelease' } else { 'app:assembleDebug' }
-  & $gradleWrapper --init-script $gradleInitScript --project-dir $androidDirectory $gradleTask "-PreactNativeArchitectures=$Architectures" --no-daemon --console=plain --stacktrace
+  & $gradleWrapper --init-script $gradleInitScript --project-dir $androidDirectory "-Duser.home=$localUserHomeForJava" "-Dkotlin.daemon.runFilesPath=$kotlinDaemonDirectoryForJava" '-Dorg.gradle.internal.http.connectionTimeout=30000' '-Dorg.gradle.internal.http.socketTimeout=30000' $gradleTask "-PreactNativeArchitectures=$Architectures" --no-daemon --console=plain --stacktrace
   if ($LASTEXITCODE -ne 0) {
     throw "Gradle APK build failed with exit code $LASTEXITCODE"
   }
