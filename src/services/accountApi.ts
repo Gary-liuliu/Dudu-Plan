@@ -1,5 +1,5 @@
 import { parseAuthSession } from '../domain/authSession';
-import type { AuthSession } from '../types';
+import type { AuthSession, ChatMessage } from '../types';
 
 const requestTimeoutMs = 12_000;
 
@@ -7,7 +7,6 @@ export type AccountApiErrorCode =
   | 'invalid_credentials'
   | 'invalid_request'
   | 'invalid_response'
-  | 'not_configured'
   | 'request_failed'
   | 'timeout'
   | 'unauthorized'
@@ -35,8 +34,6 @@ export function getLoginErrorMessage(error: unknown): string {
       return '请输入有效的用户名和密码。';
     case 'timeout':
       return '连接超时，请检查网络后重试。';
-    case 'not_configured':
-      return '登录服务尚未配置，请联系维护者。';
     case 'unavailable':
     case 'request_failed':
       return '无法连接登录服务，请检查网络或稍后重试。';
@@ -47,21 +44,7 @@ export function getLoginErrorMessage(error: unknown): string {
   }
 }
 
-export interface WorkoutPushEvent {
-  id: string;
-  type: 'workout_started' | 'workout_completed';
-  title: string;
-  body: string;
-  data: { sessionId: string };
-}
-
-export function getRelayBaseUrl(): string {
-  const relayUrl = process.env.EXPO_PUBLIC_RELAY_URL?.trim().replace(/\/$/, '');
-  if (!relayUrl) {
-    throw new AccountApiError('not_configured');
-  }
-  return relayUrl;
-}
+export const duduPlanApiBaseUrl = 'https://kakaweb.ltd/api/dudu-plan';
 
 function getResponseErrorCode(status: number, responseBody: unknown): AccountApiErrorCode {
   const serviceCode =
@@ -84,26 +67,27 @@ function getResponseErrorCode(status: number, responseBody: unknown): AccountApi
   return 'request_failed';
 }
 
-async function postJson(path: string, body: unknown, accessToken?: string): Promise<unknown> {
+async function requestJson(
+  path: string,
+  options: { method?: 'GET' | 'POST'; body?: unknown; accessToken?: string } = {},
+): Promise<unknown> {
   const controller = new AbortController();
   const timeout = setTimeout(() => controller.abort(), requestTimeoutMs);
 
   try {
-    const response = await fetch(`${getRelayBaseUrl()}${path}`, {
-      method: 'POST',
+    const response = await fetch(`${duduPlanApiBaseUrl}${path}`, {
+      method: options.method ?? 'GET',
       headers: {
-        'Content-Type': 'application/json',
-        ...(accessToken ? { Authorization: `Bearer ${accessToken}` } : {}),
+        ...(options.body !== undefined ? { 'Content-Type': 'application/json' } : {}),
+        ...(options.accessToken ? { Authorization: `Bearer ${options.accessToken}` } : {}),
       },
-      body: JSON.stringify(body),
+      ...(options.body !== undefined ? { body: JSON.stringify(options.body) } : {}),
       signal: controller.signal,
     });
     const responseBody = await response.json().catch(() => null);
-
     if (!response.ok) {
       throw new AccountApiError(getResponseErrorCode(response.status, responseBody));
     }
-
     return responseBody;
   } catch (error) {
     if (error instanceof AccountApiError) {
@@ -112,10 +96,7 @@ async function postJson(path: string, body: unknown, accessToken?: string): Prom
     if (error instanceof Error && error.name === 'AbortError') {
       throw new AccountApiError('timeout');
     }
-    if (error instanceof TypeError) {
-      throw new AccountApiError('unavailable');
-    }
-    throw new AccountApiError('request_failed');
+    throw new AccountApiError(error instanceof TypeError ? 'unavailable' : 'request_failed');
   } finally {
     clearTimeout(timeout);
   }
@@ -130,25 +111,92 @@ function requireAuthSession(value: unknown): AuthSession {
 }
 
 export async function loginAccount(username: string, password: string): Promise<AuthSession> {
-  return requireAuthSession(await postJson('/auth/login', { username, password }));
+  return requireAuthSession(await requestJson('/auth/login', {
+    method: 'POST',
+    body: { username, password },
+  }));
 }
 
 export async function refreshAccount(refreshToken: string): Promise<AuthSession> {
-  return requireAuthSession(await postJson('/auth/refresh', { refreshToken }));
+  return requireAuthSession(await requestJson('/auth/refresh', {
+    method: 'POST',
+    body: { refreshToken },
+  }));
 }
 
-export async function sendWorkoutPush(
+export async function getChatMessages(
   accessToken: string,
-  pushToken: string,
-  event: WorkoutPushEvent,
-): Promise<void> {
-  await postJson('/push', { pushToken, event }, accessToken);
+  beforeId?: number,
+  limit = 50,
+): Promise<{ items: ChatMessage[]; nextCursor: number | null }> {
+  const query = new URLSearchParams({ limit: String(limit) });
+  if (beforeId) {
+    query.set('beforeId', String(beforeId));
+  }
+  const response = await requestJson(`/chat/messages?${query.toString()}`, { accessToken });
+  if (typeof response !== 'object' || response === null || !('items' in response)) {
+    throw new AccountApiError('invalid_response');
+  }
+  const value = response as { items?: unknown; nextCursor?: unknown };
+  if (!Array.isArray(value.items)) {
+    throw new AccountApiError('invalid_response');
+  }
+  return {
+    items: value.items as ChatMessage[],
+    nextCursor: typeof value.nextCursor === 'number' ? value.nextCursor : null,
+  };
 }
 
-export function getRealtimeWebSocketUrl(accessToken: string): string {
-  const relayUrl = new URL(getRelayBaseUrl());
+export async function getChatUnreadCount(accessToken: string): Promise<number> {
+  const response = await requestJson('/chat/unread-count', { accessToken });
+  if (
+    typeof response !== 'object' || response === null ||
+    !('unreadCount' in response) || typeof response.unreadCount !== 'number'
+  ) {
+    throw new AccountApiError('invalid_response');
+  }
+  return response.unreadCount;
+}
+
+export async function markChatDelivered(
+  accessToken: string,
+  messageIds: string[],
+): Promise<ChatMessage[]> {
+  const response = await requestJson('/chat/delivered', {
+    method: 'POST', accessToken, body: { messageIds },
+  });
+  if (typeof response !== 'object' || response === null || !('items' in response)) {
+    throw new AccountApiError('invalid_response');
+  }
+  const items = (response as { items?: unknown }).items;
+  if (!Array.isArray(items)) {
+    throw new AccountApiError('invalid_response');
+  }
+  return items as ChatMessage[];
+}
+
+export async function markChatRead(
+  accessToken: string,
+  upToMessageId: string,
+): Promise<void> {
+  await requestJson('/chat/read', {
+    method: 'POST', accessToken, body: { upToMessageId },
+  });
+}
+
+export async function recallChatMessage(
+  accessToken: string,
+  messageId: string,
+): Promise<ChatMessage> {
+  return await requestJson(`/chat/messages/${encodeURIComponent(messageId)}/recall`, {
+    method: 'POST', accessToken, body: {},
+  }) as ChatMessage;
+}
+
+export function getRealtimeWebSocketUrl(): string {
+  const relayUrl = new URL(duduPlanApiBaseUrl);
   relayUrl.protocol = relayUrl.protocol === 'https:' ? 'wss:' : 'ws:';
   relayUrl.pathname = `${relayUrl.pathname.replace(/\/$/, '')}/realtime`;
-  relayUrl.search = `access_token=${encodeURIComponent(accessToken)}`;
+  relayUrl.search = '';
   return relayUrl.toString();
 }

@@ -5,6 +5,7 @@ import { ActivityIndicator, Alert, StyleSheet, Text, View } from 'react-native';
 import { SafeAreaProvider, SafeAreaView } from 'react-native-safe-area-context';
 
 import { BottomTabs } from './src/components/BottomTabs';
+import { ChatScreen } from './src/screens/ChatScreen';
 import { HomeScreen } from './src/screens/HomeScreen';
 import { LoginScreen } from './src/screens/LoginScreen';
 import { NutritionScreen } from './src/screens/NutritionScreen';
@@ -14,10 +15,10 @@ import { WorkoutScreen } from './src/screens/WorkoutScreen';
 import {
   cancelWorkoutReminders,
   rescheduleWorkoutReminders,
-  unregisterObserverPushToken,
 } from './src/services/notifications';
 import { AccountStoreProvider, useAccountStore } from './src/state/AccountStore';
 import { AppStoreProvider, useAppStore } from './src/state/AppStore';
+import { ChatStoreProvider, useChatStore } from './src/state/ChatStore';
 import { RealtimeStoreProvider, useRealtimeStore } from './src/state/RealtimeStore';
 import { colors } from './src/theme';
 import type { AppTab } from './src/types';
@@ -39,7 +40,9 @@ function AppShell() {
   const { data, hydrated } = useAppStore();
   const account = useAccountStore();
   const realtime = useRealtimeStore();
+  const chat = useChatStore();
   const [activeTab, setActiveTab] = useState<AppTab>('home');
+  const [chatOpen, setChatOpen] = useState(false);
 
   useEffect(() => {
     if (!account.hydrated) {
@@ -82,6 +85,10 @@ function AppShell() {
     );
   }
 
+  if (chatOpen) {
+    return <ChatScreen onClose={() => setChatOpen(false)} />;
+  }
+
   if (account.session.role === 'observer') {
     return (
       <>
@@ -89,15 +96,15 @@ function AppShell() {
         <ObserverScreen
           connectionState={realtime.connectionState}
           lastSyncedAt={realtime.lastSyncedAt}
+          onOpenChat={() => setChatOpen(true)}
           onLogout={() => {
-            const unregisterPushToken = unregisterObserverPushToken().catch(() => undefined);
             void account.logout()
-              .then(() => unregisterPushToken)
               .catch(() => {
                 Alert.alert('退出失败', '无法清除本机登录状态，请稍后重试。');
               });
           }}
           sessions={realtime.observerSessions}
+          unreadCount={chat.unreadCount}
         />
       </>
     );
@@ -107,7 +114,13 @@ function AppShell() {
     <SafeAreaView edges={['top']} style={styles.safeArea}>
       <StatusBar style="dark" />
       <View style={styles.screen}>
-        {activeTab === 'home' ? <HomeScreen onNavigate={setActiveTab} /> : null}
+        {activeTab === 'home' ? (
+          <HomeScreen
+            onNavigate={setActiveTab}
+            onOpenChat={() => setChatOpen(true)}
+            unreadCount={chat.unreadCount}
+          />
+        ) : null}
         {activeTab === 'workout' ? <WorkoutScreen /> : null}
         {activeTab === 'nutrition' ? <NutritionScreen /> : null}
         {activeTab === 'progress' ? <ProgressScreen /> : null}
@@ -123,7 +136,9 @@ export default function App() {
       <AccountStoreProvider>
         <AppStoreProvider>
           <RealtimeStoreProvider>
-            <AppShell />
+            <ChatStoreProvider>
+              <AppShell />
+            </ChatStoreProvider>
           </RealtimeStoreProvider>
         </AppStoreProvider>
       </AccountStoreProvider>

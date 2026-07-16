@@ -9,6 +9,7 @@ const emptyObserverCache: ObserverCache = {
   version: 1,
   sessions: [],
   lastSyncedAt: null,
+  handledWorkoutEventIds: [],
 };
 
 function normalizeSession(value: unknown): WorkoutSession | null {
@@ -53,6 +54,9 @@ export async function loadObserverCache(): Promise<ObserverCache> {
             .filter((session): session is WorkoutSession => session !== null)
         : [],
       lastSyncedAt: typeof value.lastSyncedAt === 'string' ? value.lastSyncedAt : null,
+      handledWorkoutEventIds: Array.isArray(value.handledWorkoutEventIds)
+        ? value.handledWorkoutEventIds.filter((id): id is string => typeof id === 'string').slice(-200)
+        : [],
     };
   } catch {
     return emptyObserverCache;
@@ -60,5 +64,8 @@ export async function loadObserverCache(): Promise<ObserverCache> {
 }
 
 export async function saveObserverCache(cache: ObserverCache): Promise<void> {
-  await AsyncStorage.setItem(observerCacheKey, JSON.stringify(cache));
+  await AsyncStorage.setItem(observerCacheKey, JSON.stringify({
+    ...cache,
+    handledWorkoutEventIds: cache.handledWorkoutEventIds.slice(-200),
+  }));
 }

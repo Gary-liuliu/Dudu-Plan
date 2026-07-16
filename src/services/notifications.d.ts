@@ -6,5 +6,7 @@ export function rescheduleWorkoutReminders(
   hour?: number,
   minute?: number,
 ): Promise<boolean>;
-export function getObserverPushToken(): Promise<string | null>;
-export function unregisterObserverPushToken(): Promise<void>;
+export function showWorkoutEventNotification(
+  eventType: 'workout_started' | 'workout_completed',
+  sessionId: string,
+): Promise<void>;

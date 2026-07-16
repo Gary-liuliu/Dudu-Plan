@@ -5,12 +5,16 @@ import {
   ChevronRight as OpenDetails,
   CircleAlert,
   Clock3,
+  Heart,
+  Laugh,
   LogOut,
+  MessageCircle,
   TimerReset,
   X,
 } from 'lucide-react-native';
 import { useEffect, useMemo, useState } from 'react';
 import {
+  Alert,
   Modal,
   Pressable,
   ScrollView,
@@ -32,6 +36,7 @@ import {
   getWorkoutDurationSeconds,
 } from '../domain/dateTime';
 import { colors } from '../theme';
+import { useChatStore } from '../state/ChatStore';
 import type {
   ExerciseLog,
   ExerciseTemplate,
@@ -44,9 +49,41 @@ export interface ObserverScreenProps {
   connectionState: 'connecting' | 'online' | 'offline';
   lastSyncedAt: string | null;
   onLogout: () => void;
+  onOpenChat: () => void;
+  unreadCount: number;
 }
 
 const weekdayLabels = ['一', '二', '三', '四', '五', '六', '日'];
+
+const encouragementMessages = [
+  '嘟嘟加油，练完给你抱抱～(づ｡◕‿‿◕｡)づ',
+  '我想摸嘟嘟的腹肌，再坚持一下嘛～(˶‾᷄ ⁻̫ ‾᷅˵)',
+  '我想摸嘟嘟的胸肌，今天也要认真练～(๑•̀ㅂ•́)و✧',
+  '肩膀练宽一点，以后让我安心靠着～(｡･ω･｡)ﾉ♡',
+  '背练厚一点，以后抱我更稳哦～(〃▽〃)',
+  '最后一组不许偷懒，我在看着你～(¬‿¬)',
+  '今天的嘟嘟也很自律，奖励一个亲亲～( ˘ ³˘)♥',
+  '流汗的嘟嘟一定超级帅～(๑˃̵ᴗ˂̵)و',
+  '再坚持一下，练完来和女朋友贴贴～(つ≧▽≦)つ',
+  '核心要收紧，我等着验收腹肌～(๑´ڡ`๑)',
+  '腿也要认真练，男朋友要全面发展～ᕦ(ò_óˇ)ᕤ',
+  '嘟嘟最棒啦，我一直给你加油～٩(ˊᗜˋ*)و',
+];
+
+const teasingWarnings = [
+  '不要嘲笑嘟嘟哦，嘟嘟已经很努力啦～(｡•́︿•̀｡)',
+  '嘟嘟只是暂时累了，不可以笑他嘛～( •́ ᴖ •̀ )',
+  '再笑嘟嘟就要委屈巴巴了～(╥﹏╥)',
+  '嘟嘟有认真训练的，要多夸夸他呀～(｡•́ωก̀｡)',
+  '不许欺负努力练肌肉的嘟嘟～(っ˘̩╭╮˘̩)っ',
+  '嘟嘟听见会伤心的，快摸摸他的头～(｡•́︿•̀｡)ﾉ',
+  '今天没练好也没关系，嘟嘟已经很棒啦～(つ﹏⊂)',
+  '嘲笑按钮是假的，保护嘟嘟才是真的～(ó﹏ò｡)',
+  '嘟嘟需要的是亲亲，不是嘲笑～(｡•́‿•̀｡)っ♡',
+  '再点的话，嘟嘟就要躲起来偷偷难过了～(´；ω；`)',
+  '请对嘟嘟温柔一点，他可是你的小男朋友呀～(｡•́︿•̀｡)',
+  '检测到嘲笑行为，已自动转换成抱抱～(づ˘̩╭╮˘̩)づ',
+];
 
 function getTimestampValue(timestamp?: string): number {
   const value = timestamp ? Date.parse(timestamp) : Number.NaN;
@@ -308,12 +345,17 @@ export function ObserverScreen({
   connectionState,
   lastSyncedAt,
   onLogout,
+  onOpenChat,
+  unreadCount,
 }: ObserverScreenProps) {
+  const chat = useChatStore();
   const [displayedMonth, setDisplayedMonth] = useState(
     () => new Date(new Date().getFullYear(), new Date().getMonth(), 1, 12),
   );
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
   const [nowMs, setNowMs] = useState(Date.now());
+  const [encouragementPickerVisible, setEncouragementPickerVisible] = useState(false);
+  const [lastEncouragementAt, setLastEncouragementAt] = useState(0);
 
   useEffect(() => {
     const timer = setInterval(() => setNowMs(Date.now()), 1_000);
@@ -387,13 +429,29 @@ export function ObserverScreen({
               <Text style={styles.syncText}>· {formatSyncLabel(lastSyncedAt)}</Text>
             </View>
           </View>
-          <IconButton
-            backgroundColor={colors.surface}
-            icon={LogOut}
-            label="退出账号"
-            onPress={onLogout}
-            size={42}
-          />
+          <View style={styles.headerActions}>
+            <View>
+              <IconButton
+                backgroundColor={colors.surface}
+                icon={MessageCircle}
+                label="打开聊天"
+                onPress={onOpenChat}
+                size={42}
+              />
+              {unreadCount > 0 ? (
+                <View style={styles.chatBadge}>
+                  <Text style={styles.chatBadgeText}>{Math.min(unreadCount, 99)}</Text>
+                </View>
+              ) : null}
+            </View>
+            <IconButton
+              backgroundColor={colors.surface}
+              icon={LogOut}
+              label="退出账号"
+              onPress={onLogout}
+              size={42}
+            />
+          </View>
         </View>
 
         <View style={styles.liveSection}>
@@ -408,6 +466,7 @@ export function ObserverScreen({
               : null;
 
             return (
+              <>
               <Pressable
                 accessibilityLabel={`查看正在进行的${template.shortTitle}`}
                 accessibilityRole="button"
@@ -444,6 +503,32 @@ export function ObserverScreen({
                   ) : null}
                 </View>
               </Pressable>
+              <View style={styles.liveActions}>
+                <Pressable
+                  disabled={connectionState !== 'online' || nowMs - lastEncouragementAt < 3_000}
+                  onPress={() => setEncouragementPickerVisible(true)}
+                  style={({ pressed }) => [
+                    styles.liveActionButton,
+                    styles.encouragementButton,
+                    (connectionState !== 'online' || nowMs - lastEncouragementAt < 3_000) && styles.disabledAction,
+                    pressed && styles.pressed,
+                  ]}
+                >
+                  <Heart color={colors.coral} fill={colors.coral} size={18} />
+                  <Text style={styles.encouragementButtonText}>给嘟嘟加油</Text>
+                </Pressable>
+                <Pressable
+                  onPress={() => Alert.alert(
+                    '不可以嘲笑嘟嘟',
+                    teasingWarnings[Math.floor(Math.random() * teasingWarnings.length)],
+                  )}
+                  style={({ pressed }) => [styles.liveActionButton, pressed && styles.pressed]}
+                >
+                  <Laugh color={colors.inkMuted} size={18} />
+                  <Text style={styles.teasingButtonText}>嘲笑</Text>
+                </Pressable>
+              </View>
+              </>
             );
           })() : (
             <View style={styles.idleBand}>
@@ -568,6 +653,37 @@ export function ObserverScreen({
           />
         ) : null}
       </Modal>
+
+      <Modal
+        animationType="fade"
+        onRequestClose={() => setEncouragementPickerVisible(false)}
+        transparent
+        visible={encouragementPickerVisible}
+      >
+        <Pressable
+          onPress={() => setEncouragementPickerVisible(false)}
+          style={styles.encouragementOverlay}
+        >
+          <View style={styles.encouragementSheet}>
+            <Text style={styles.encouragementTitle}>给嘟嘟一点爱的鼓励</Text>
+            <ScrollView style={styles.encouragementList}>
+              {encouragementMessages.map((message) => (
+                <Pressable
+                  key={message}
+                  onPress={() => {
+                    chat.sendMessage(message, 'encouragement');
+                    setLastEncouragementAt(Date.now());
+                    setEncouragementPickerVisible(false);
+                  }}
+                  style={({ pressed }) => [styles.encouragementOption, pressed && styles.pressed]}
+                >
+                  <Text style={styles.encouragementOptionText}>{message}</Text>
+                </Pressable>
+              ))}
+            </ScrollView>
+          </View>
+        </Pressable>
+      </Modal>
     </SafeAreaView>
   );
 }
@@ -594,6 +710,13 @@ const styles = StyleSheet.create({
   headerCopy: {
     flex: 1,
   },
+  headerActions: { flexDirection: 'row', alignItems: 'center', gap: 8 },
+  chatBadge: {
+    position: 'absolute', top: -4, right: -4, minWidth: 18, height: 18,
+    paddingHorizontal: 4, alignItems: 'center', justifyContent: 'center',
+    borderRadius: 9, backgroundColor: colors.coral,
+  },
+  chatBadgeText: { color: colors.white, fontSize: 9, fontWeight: '900' },
   title: {
     color: colors.ink,
     fontSize: 24,
@@ -675,6 +798,24 @@ const styles = StyleSheet.create({
     flexWrap: 'wrap',
     gap: 14,
   },
+  liveActions: { marginTop: 10, flexDirection: 'row', gap: 9 },
+  liveActionButton: {
+    minHeight: 42, paddingHorizontal: 13, flexDirection: 'row', alignItems: 'center',
+    justifyContent: 'center', gap: 6, borderColor: colors.line, borderWidth: 1,
+    borderRadius: 8, backgroundColor: colors.surface,
+  },
+  encouragementButton: { flex: 1, borderColor: colors.coral, backgroundColor: '#FFF0F3' },
+  encouragementButtonText: { color: colors.coralDark, fontSize: 12, fontWeight: '900' },
+  teasingButtonText: { color: colors.inkMuted, fontSize: 12, fontWeight: '800' },
+  disabledAction: { opacity: 0.42 },
+  encouragementOverlay: {
+    flex: 1, padding: 20, justifyContent: 'center', backgroundColor: 'rgba(20,20,28,0.46)',
+  },
+  encouragementSheet: { maxHeight: '78%', padding: 18, borderRadius: 14, backgroundColor: colors.surface },
+  encouragementTitle: { color: colors.ink, fontSize: 18, fontWeight: '900', textAlign: 'center' },
+  encouragementList: { marginTop: 12 },
+  encouragementOption: { paddingVertical: 12, borderBottomColor: colors.line, borderBottomWidth: StyleSheet.hairlineWidth },
+  encouragementOptionText: { color: colors.ink, fontSize: 13, lineHeight: 19 },
   inlineStat: {
     flexDirection: 'row',
     alignItems: 'center',

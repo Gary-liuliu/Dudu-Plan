@@ -25,11 +25,6 @@ assertEqual(
   '中继不可用应显示可操作提示',
 );
 assertEqual(
-  getLoginErrorMessage(new AccountApiError('not_configured')),
-  '登录服务尚未配置，请联系维护者。',
-  '缺少中继地址应显示配置提示',
-);
-assertEqual(
   getLoginErrorMessage(new Error('raw service details')),
   '登录失败，请稍后重试。',
   '未知错误不得透传原始内容',

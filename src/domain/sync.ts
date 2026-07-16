@@ -1,4 +1,4 @@
-import type { WorkoutPushEvent } from '../services/accountApi';
+import type { WorkoutEventType } from './realtimeProtocol';
 import type { OwnerSyncMetadata } from '../services/ownerSyncStorage';
 import type { WorkoutSession } from '../types';
 
@@ -41,9 +41,15 @@ export function getPendingWorkoutPushEvents(
   sessions: WorkoutSession[],
   metadata: OwnerSyncMetadata,
   nowMs = Date.now(),
-): Array<{ event: WorkoutPushEvent; expired: boolean }> {
+): Array<{
+  event: { id: string; type: WorkoutEventType; data: { sessionId: string } };
+  expired: boolean;
+}> {
   const handledEventIds = new Set(metadata.handledNotificationEventIds);
-  const pendingEvents: Array<{ event: WorkoutPushEvent; expired: boolean }> = [];
+  const pendingEvents: Array<{
+    event: { id: string; type: WorkoutEventType; data: { sessionId: string } };
+    expired: boolean;
+  }> = [];
 
   for (const session of getSyncEligibleSessions(sessions, metadata)) {
     const startEventId = `${session.id}:workout_started`;
@@ -53,8 +59,6 @@ export function getPendingWorkoutPushEvents(
         event: {
           id: startEventId,
           type: 'workout_started',
-          title: '嘟嘟开始训练',
-          body: '打开嘟嘟计划查看实时训练步骤。',
           data: { sessionId: session.id },
         },
         expired: !Number.isFinite(startedAtMs) || nowMs - startedAtMs > notificationRetryWindowMs,
@@ -69,9 +73,7 @@ export function getPendingWorkoutPushEvents(
           event: {
             id: completedEventId,
             type: 'workout_completed',
-            title: '嘟嘟完成训练',
-            body: '本次训练已经记录完成。',
-            data: { sessionId: session.id },
+          data: { sessionId: session.id },
           },
           expired:
             !Number.isFinite(completedAtMs) || nowMs - completedAtMs > notificationRetryWindowMs,

@@ -33,7 +33,6 @@ const metadata: OwnerSyncMetadata = {
   version: 1,
   syncStartedAt: '2026-07-14T12:00:00.000Z',
   includedSessionIds: ['legacy-active'],
-  observerPushToken: 'ExponentPushToken[test]',
   handledNotificationEventIds: [],
 };
 

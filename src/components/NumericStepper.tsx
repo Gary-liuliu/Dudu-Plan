@@ -13,6 +13,7 @@ interface NumericStepperProps {
   max?: number;
   suffix?: string;
   precision?: number;
+  disabled?: boolean;
 }
 
 export function NumericStepper({
@@ -24,6 +25,7 @@ export function NumericStepper({
   max = Number.POSITIVE_INFINITY,
   suffix = '',
   precision = 0,
+  disabled = false,
 }: NumericStepperProps) {
   const changeBy = (delta: number) => {
     const nextValue = Math.min(max, Math.max(min, value + delta));
@@ -32,16 +34,17 @@ export function NumericStepper({
 
   return (
     <View style={styles.container}>
-      <Text style={styles.label}>{label}</Text>
+      <Text style={[styles.label, disabled && styles.disabledText]}>{label}</Text>
       <View style={styles.controls}>
         <IconButton
           label={`减少${label}`}
           icon={Minus}
           onPress={() => changeBy(-step)}
           backgroundColor={colors.background}
+          disabled={disabled}
           size={38}
         />
-        <Text style={styles.value} numberOfLines={1}>
+        <Text style={[styles.value, disabled && styles.disabledText]} numberOfLines={1}>
           {value.toFixed(precision)}{suffix}
         </Text>
         <IconButton
@@ -49,6 +52,7 @@ export function NumericStepper({
           icon={Plus}
           onPress={() => changeBy(step)}
           backgroundColor={colors.background}
+          disabled={disabled}
           size={38}
         />
       </View>
@@ -82,5 +86,8 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     textAlign: 'center',
     letterSpacing: 0,
+  },
+  disabledText: {
+    color: colors.inkMuted,
   },
 });

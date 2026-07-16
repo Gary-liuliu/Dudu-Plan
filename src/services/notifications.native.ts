@@ -1,4 +1,3 @@
-import Constants from 'expo-constants';
 import * as Notifications from 'expo-notifications';
 import { Platform } from 'react-native';
 
@@ -218,26 +217,26 @@ export async function rescheduleWorkoutReminders(
   return enabled ? scheduleWorkoutReminders(hour, minute) : false;
 }
 
-export async function getObserverPushToken(): Promise<string | null> {
+export async function showWorkoutEventNotification(
+  eventType: 'workout_started' | 'workout_completed',
+  sessionId: string,
+): Promise<void> {
   const permissionGranted = await requestNotificationPermission();
   if (!permissionGranted) {
-    return null;
+    return;
   }
 
-  const projectId =
-    Constants.expoConfig?.extra?.eas?.projectId ?? Constants.easConfig?.projectId;
-  if (typeof projectId !== 'string' || projectId.length === 0) {
-    return null;
-  }
-
-  try {
-    const token = await Notifications.getExpoPushTokenAsync({ projectId });
-    return token.data;
-  } catch {
-    return null;
-  }
-}
-
-export async function unregisterObserverPushToken(): Promise<void> {
-  await Notifications.unregisterForNotificationsAsync();
+  await Notifications.scheduleNotificationAsync({
+    content: {
+      title: eventType === 'workout_started' ? '嘟嘟开始训练了' : '嘟嘟完成训练了',
+      body: eventType === 'workout_started'
+        ? '打开嘟嘟计划查看实时训练步骤。'
+        : '本次训练已经记录完成。',
+      sound: 'default',
+      color: '#7C5CFC',
+      priority: Notifications.AndroidNotificationPriority.HIGH,
+      data: { source: 'realtime-workout-event', eventType, sessionId },
+    },
+    trigger: null,
+  });
 }

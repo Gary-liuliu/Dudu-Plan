@@ -19,8 +19,7 @@ export async function rescheduleWorkoutReminders(
   return false;
 }
 
-export async function getObserverPushToken(): Promise<string | null> {
-  return null;
-}
-
-export async function unregisterObserverPushToken(): Promise<void> {}
+export async function showWorkoutEventNotification(
+  _eventType: 'workout_started' | 'workout_completed',
+  _sessionId: string,
+): Promise<void> {}

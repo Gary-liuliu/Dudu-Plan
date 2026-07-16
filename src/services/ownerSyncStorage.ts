@@ -6,7 +6,6 @@ export interface OwnerSyncMetadata {
   version: 1;
   syncStartedAt: string;
   includedSessionIds: string[];
-  observerPushToken: string | null;
   handledNotificationEventIds: string[];
 }
 
@@ -24,8 +23,6 @@ export async function loadOrCreateOwnerSyncMetadata(
           includedSessionIds: Array.isArray(value.includedSessionIds)
             ? value.includedSessionIds.filter((id): id is string => typeof id === 'string')
             : [],
-          observerPushToken:
-            typeof value.observerPushToken === 'string' ? value.observerPushToken : null,
           handledNotificationEventIds: Array.isArray(value.handledNotificationEventIds)
             ? value.handledNotificationEventIds.filter(
                 (id): id is string => typeof id === 'string',
@@ -42,7 +39,6 @@ export async function loadOrCreateOwnerSyncMetadata(
     version: 1,
     syncStartedAt: new Date().toISOString(),
     includedSessionIds: activeSessionIds,
-    observerPushToken: null,
     handledNotificationEventIds: [],
   };
   await saveOwnerSyncMetadata(metadata);

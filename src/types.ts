@@ -129,6 +129,27 @@ export interface ObserverCache {
   version: 1;
   sessions: WorkoutSession[];
   lastSyncedAt: string | null;
+  handledWorkoutEventIds: string[];
+}
+
+export type ChatMessageType = 'text' | 'encouragement';
+
+export type ChatLocalState = 'sending' | 'failed';
+
+export interface ChatMessage {
+  id: number | null;
+  messageId: string;
+  senderRole: AppRole;
+  receiverRole: AppRole;
+  messageType: ChatMessageType;
+  content: string | null;
+  replyToMessageId: string | null;
+  clientCreatedAt: number;
+  serverCreatedAt: number | null;
+  deliveredAt: number | null;
+  readAt: number | null;
+  recalledAt: number | null;
+  localState?: ChatLocalState;
 }
 
 export interface ProgressionSuggestion {

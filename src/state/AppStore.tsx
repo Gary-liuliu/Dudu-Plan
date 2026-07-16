@@ -14,6 +14,11 @@ import {
   getWorkoutTemplate,
 } from '../data/workoutPlan';
 import {
+  applySetLogPatch,
+  createExerciseSetLogs,
+  type SetLogPatch,
+} from '../domain/workoutSets';
+import {
   createDefaultAppData,
   loadAppData,
   saveAppData,
@@ -22,17 +27,12 @@ import type {
   AppData,
   DailyNutritionLog,
   ExerciseLog,
-  SetLog,
   UserProfile,
   WeightRecord,
   WorkoutKind,
   WorkoutSession,
 } from '../types';
 import { createLocalId } from '../utils/id';
-
-export type SetLogPatch = Partial<
-  Pick<SetLog, 'weightKg' | 'reps' | 'rir' | 'completed' | 'pain' | 'completedAt'>
->;
 
 export interface AppStoreValue {
   data: AppData;
@@ -240,23 +240,10 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
         exerciseLogs: template.exercises.map((exercise) => {
           const previousLog = findLatestCompletedExerciseLog(existingSessions, exercise.id);
           const previousCompletedSets = previousLog?.sets.filter((setLog) => setLog.completed) ?? [];
-          const fallbackWeight = previousCompletedSets.findLast(
-            (setLog) => setLog.weightKg !== null,
-          )?.weightKg;
 
           return {
             exerciseId: exercise.id,
-            sets: Array.from({ length: exercise.sets }, (_, index) => ({
-              index,
-              weightKg:
-                exercise.equipment === 'dumbbell'
-                  ? previousCompletedSets[index]?.weightKg ?? fallbackWeight ?? null
-                  : null,
-              reps: 0,
-              rir: 2,
-              completed: false,
-              pain: false,
-            })),
+            sets: createExerciseSetLogs(exercise, previousCompletedSets),
           };
         }),
         templateVersion: CURRENT_WORKOUT_TEMPLATE_VERSION,
@@ -279,29 +266,21 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       patch: SetLogPatch,
     ): void => {
       commitData((current) =>
-        updateSession(current, sessionId, (session) => ({
-          ...session,
-          exerciseLogs: session.exerciseLogs.map((exerciseLog) => {
+        updateSession(current, sessionId, (session) => {
+          const exerciseLogs = session.exerciseLogs.map((exerciseLog) => {
             if (exerciseLog.exerciseId !== exerciseId) {
               return exerciseLog;
             }
 
-            return {
-              ...exerciseLog,
-              sets: exerciseLog.sets.map((setLog) => {
-                if (setLog.index !== setIndex) {
-                  return setLog;
-                }
+            const sets = applySetLogPatch(exerciseLog.sets, setIndex, patch);
+            return sets === exerciseLog.sets ? exerciseLog : { ...exerciseLog, sets };
+          });
+          const hasChanges = exerciseLogs.some(
+            (exerciseLog, index) => exerciseLog !== session.exerciseLogs[index],
+          );
 
-                const nextSet = { ...setLog, ...patch };
-                if (patch.completed === false) {
-                  delete nextSet.completedAt;
-                }
-                return nextSet;
-              }),
-            };
-          }),
-        })),
+          return hasChanges ? { ...session, exerciseLogs } : session;
+        }),
       );
     },
     [commitData],
@@ -318,30 +297,50 @@ export function AppStoreProvider({ children }: { children: ReactNode }) {
       const durationSeconds = Math.max(0, Math.round(restSeconds));
 
       commitData((current) =>
-        updateSession(current, sessionId, (session) => ({
-          ...session,
-          exerciseLogs: session.exerciseLogs.map((exerciseLog) =>
-            exerciseLog.exerciseId === exerciseId
-              ? {
-                  ...exerciseLog,
-                  sets: exerciseLog.sets.map((setLog) =>
-                    setLog.index === setIndex
-                      ? { ...setLog, completed: true, completedAt }
-                      : setLog,
-                  ),
-                }
-              : exerciseLog,
-          ),
-          restTimer:
-            durationSeconds > 0
-              ? {
-                  exerciseId,
-                  setIndex,
-                  durationSeconds,
-                  endAt: Date.now() + durationSeconds * 1000,
-                }
-              : undefined,
-        })),
+        updateSession(current, sessionId, (session) => {
+          let didCompleteSet = false;
+          const exerciseLogs = session.exerciseLogs.map((exerciseLog) => {
+            if (exerciseLog.exerciseId !== exerciseId) {
+              return exerciseLog;
+            }
+
+            const sets = exerciseLog.sets.map((setLog) => {
+              if (setLog.index !== setIndex || setLog.completed) {
+                return setLog;
+              }
+
+              return { ...setLog, completed: true, completedAt };
+            });
+            const didUpdateExercise = sets.some(
+              (setLog, index) => setLog !== exerciseLog.sets[index],
+            );
+
+            if (!didUpdateExercise) {
+              return exerciseLog;
+            }
+
+            didCompleteSet = true;
+            return { ...exerciseLog, sets };
+          });
+
+          if (!didCompleteSet) {
+            return session;
+          }
+
+          return {
+            ...session,
+            exerciseLogs,
+            restTimer:
+              durationSeconds > 0
+                ? {
+                    exerciseId,
+                    setIndex,
+                    durationSeconds,
+                    endAt: Date.now() + durationSeconds * 1000,
+                  }
+                : undefined,
+          };
+        }),
       );
     },
     [commitData],

@@ -31,3 +31,40 @@ const currentSession = normalizeWorkoutSession({
 
 assertEqual(currentSession?.templateVersion, 2, 'v2 会话版本不得被迁移覆盖');
 assertEqual(currentSession?.updatedAt, currentUpdatedAt, '已有更新时间不得被迁移覆盖');
+
+const activeSession = normalizeWorkoutSession({
+  id: 'active-session',
+  scheduledDate: '2026-07-14',
+  kind: 'lower-a',
+  source: 'scheduled',
+  status: 'in_progress',
+  startedAt: legacyStartedAt,
+  currentExerciseIndex: 0,
+  exerciseLogs: [
+    {
+      exerciseId: 'goblet-squat',
+      sets: [
+        {
+          index: 0,
+          weightKg: null,
+          reps: 0,
+          rir: 2,
+          completed: false,
+          pain: false,
+        },
+        {
+          index: 1,
+          weightKg: 8,
+          reps: 0,
+          rir: 2,
+          completed: true,
+          pain: false,
+        },
+      ],
+    },
+  ],
+  templateVersion: 2,
+});
+
+assertEqual(activeSession?.exerciseLogs[0].sets[0].reps, 10, '旧活动训练的未完成组应补入要求次数');
+assertEqual(activeSession?.exerciseLogs[0].sets[1].reps, 0, '已完成组的历史次数不得被迁移覆盖');

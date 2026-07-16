@@ -1,7 +1,7 @@
 import { LinearGradient } from 'expo-linear-gradient';
-import { CalendarDays, Check, ChevronRight, Dumbbell, Sparkles } from 'lucide-react-native';
+import { CalendarDays, Check, ChevronRight, Dumbbell, MessageCircle, Sparkles } from 'lucide-react-native';
 import { useEffect, useMemo, useState } from 'react';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 
 import { PrimaryButton } from '../components/PrimaryButton';
 import {
@@ -16,11 +16,13 @@ import type { AppTab } from '../types';
 
 interface HomeScreenProps {
   onNavigate: (tab: AppTab) => void;
+  onOpenChat: () => void;
+  unreadCount: number;
 }
 
 const weekdayLabels = ['日', '一', '二', '三', '四', '五', '六'];
 
-export function HomeScreen({ onNavigate }: HomeScreenProps) {
+export function HomeScreen({ onNavigate, onOpenChat, unreadCount }: HomeScreenProps) {
   const { data, activeSession, startWorkout } = useAppStore();
   const [now, setNow] = useState(() => new Date());
   const todayState = useMemo(
@@ -89,6 +91,14 @@ export function HomeScreen({ onNavigate }: HomeScreenProps) {
               {now.getMonth() + 1}月{now.getDate()}日 · 周{weekdayLabels[now.getDay()]}
             </Text>
           </View>
+          <Pressable accessibilityLabel="打开聊天" onPress={onOpenChat} style={styles.chatButton}>
+            <MessageCircle color={colors.white} size={22} strokeWidth={2.4} />
+            {unreadCount > 0 ? (
+              <View style={styles.chatBadge}>
+                <Text style={styles.chatBadgeText}>{Math.min(unreadCount, 99)}</Text>
+              </View>
+            ) : null}
+          </Pressable>
         </View>
 
         <View style={styles.heroCopy}>
@@ -206,6 +216,28 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
   },
+  chatButton: {
+    width: 42,
+    height: 42,
+    marginLeft: 'auto',
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 21,
+    backgroundColor: 'rgba(32,32,39,0.18)',
+  },
+  chatBadge: {
+    position: 'absolute',
+    top: -3,
+    right: -3,
+    minWidth: 18,
+    height: 18,
+    paddingHorizontal: 4,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderRadius: 9,
+    backgroundColor: colors.purple,
+  },
+  chatBadgeText: { color: colors.white, fontSize: 9, fontWeight: '900' },
   logoMark: {
     height: 40,
     width: 40,

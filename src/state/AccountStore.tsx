@@ -96,6 +96,7 @@ export function AccountStoreProvider({ children }: { children: ReactNode }) {
     }
 
     if (currentSession.refreshTokenExpiresAt <= Date.now()) {
+      await replaceSession(null);
       return null;
     }
 
@@ -105,7 +106,10 @@ export function AccountStoreProvider({ children }: { children: ReactNode }) {
           await replaceSession(refreshedSession);
           return refreshedSession.accessToken;
         })
-        .catch(() => null)
+        .catch(async () => {
+          await replaceSession(null);
+          return null;
+        })
         .finally(() => {
           refreshPromiseRef.current = null;
         });

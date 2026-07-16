@@ -10,12 +10,12 @@ import {
   Clock3,
   Dumbbell,
   Info,
-  RotateCcw,
+  Heart,
   Sparkles,
   TimerReset,
   X,
 } from 'lucide-react-native';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import {
   Modal,
   Pressable,
@@ -38,7 +38,9 @@ import {
   getWorkoutDurationSeconds,
 } from '../domain/dateTime';
 import { getProgressionSuggestion } from '../domain/progression';
+import type { SetLogPatch } from '../domain/workoutSets';
 import { useAppStore } from '../state/AppStore';
+import { useChatStore } from '../state/ChatStore';
 import { colors } from '../theme';
 import type {
   ExerciseLog,
@@ -52,7 +54,7 @@ interface SetEditorProps {
   exercise: ExerciseTemplate;
   setLog: SetLog;
   weightStepKg: number;
-  onUpdate: (patch: Partial<SetLog>) => void;
+  onUpdate: (patch: SetLogPatch) => void;
   onComplete: () => void;
 }
 
@@ -82,7 +84,15 @@ function formatClockTime(isoTimestamp: string): string {
   return `${String(date.getHours()).padStart(2, '0')}:${String(date.getMinutes()).padStart(2, '0')}`;
 }
 
-function RirSelector({ value, onChange }: { value: number; onChange: (value: number) => void }) {
+function RirSelector({
+  value,
+  onChange,
+  disabled = false,
+}: {
+  value: number;
+  onChange: (value: number) => void;
+  disabled?: boolean;
+}) {
   return (
     <View style={styles.rirGroup} accessibilityLabel="剩余次数 RIR">
       {[0, 1, 2, 3].map((rir) => {
@@ -90,12 +100,14 @@ function RirSelector({ value, onChange }: { value: number; onChange: (value: num
         return (
           <Pressable
             accessibilityRole="radio"
-            accessibilityState={{ selected }}
+            accessibilityState={{ disabled, selected }}
+            disabled={disabled}
             key={rir}
             onPress={() => onChange(rir)}
             style={({ pressed }) => [
               styles.rirOption,
               selected && styles.rirOptionSelected,
+              disabled && styles.controlDisabled,
               pressed && styles.pressed,
             ]}
           >
@@ -107,7 +119,7 @@ function RirSelector({ value, onChange }: { value: number; onChange: (value: num
   );
 }
 
-// [Function] 编辑单组训练数据并触发休息计时。[Warning] 哑铃重量统一记录单只重量。
+// [Function] 编辑单组训练数据。[Warning] 已完成组永久锁定，同步只覆盖未完成组。
 function SetEditor({ exercise, setLog, weightStepKg, onUpdate, onComplete }: SetEditorProps) {
   const needsWeight = exercise.equipment === 'dumbbell';
   const canComplete = setLog.reps > 0 && (!needsWeight || (setLog.weightKg ?? 0) > 0);
@@ -121,11 +133,13 @@ function SetEditor({ exercise, setLog, weightStepKg, onUpdate, onComplete }: Set
         </View>
         <Pressable
           accessibilityRole="checkbox"
-          accessibilityState={{ checked: setLog.pain }}
+          accessibilityState={{ checked: setLog.pain, disabled: setLog.completed }}
+          disabled={setLog.completed}
           onPress={() => onUpdate({ pain: !setLog.pain })}
           style={({ pressed }) => [
             styles.painToggle,
             setLog.pain && styles.painToggleActive,
+            setLog.completed && styles.controlDisabled,
             pressed && styles.pressed,
           ]}
         >
@@ -137,6 +151,7 @@ function SetEditor({ exercise, setLog, weightStepKg, onUpdate, onComplete }: Set
       <View style={styles.stepperRow}>
         {needsWeight ? (
           <NumericStepper
+            disabled={setLog.completed}
             label="单只哑铃"
             max={100}
             min={0}
@@ -148,6 +163,7 @@ function SetEditor({ exercise, setLog, weightStepKg, onUpdate, onComplete }: Set
           />
         ) : null}
         <NumericStepper
+          disabled={setLog.completed}
           label={exercise.repUnit === '秒' ? '时长' : exercise.isPerSide ? '每侧次数' : '次数'}
           max={exercise.repUnit === '秒' ? 300 : 100}
           min={0}
@@ -159,17 +175,21 @@ function SetEditor({ exercise, setLog, weightStepKg, onUpdate, onComplete }: Set
 
       <View style={styles.rirRow}>
         <Text style={styles.rirLabel}>RIR</Text>
-        <RirSelector value={setLog.rir} onChange={(rir) => onUpdate({ rir })} />
+        <RirSelector
+          disabled={setLog.completed}
+          value={setLog.rir}
+          onChange={(rir) => onUpdate({ rir })}
+        />
       </View>
 
       {setLog.completed ? (
-        <PrimaryButton
-          label="撤销本组"
-          icon={RotateCcw}
-          onPress={() => onUpdate({ completed: false, completedAt: undefined })}
-          tone="light"
-          style={styles.setAction}
-        />
+        <View
+          accessibilityLabel="本组已完成，数据已锁定"
+          style={[styles.completedSetStatus, styles.setAction]}
+        >
+          <Check color={colors.teal} size={18} strokeWidth={2.8} />
+          <Text style={styles.completedSetStatusText}>本组已完成 · 数据已锁定</Text>
+        </View>
       ) : (
         <PrimaryButton
           disabled={!canComplete}
@@ -190,6 +210,7 @@ interface ActiveWorkoutProps {
 
 // [Function] 执行进行中的训练并保存每组状态。[Warning] 未完成全部组时结束需要二次确认。
 function ActiveWorkout({ session }: ActiveWorkoutProps) {
+  const chat = useChatStore();
   const {
     data,
     updateSet,
@@ -202,6 +223,15 @@ function ActiveWorkout({ session }: ActiveWorkoutProps) {
   const [nowMs, setNowMs] = useState(Date.now());
   const [showFinishModal, setShowFinishModal] = useState(false);
   const [showTechnique, setShowTechnique] = useState(false);
+  const [encouragementText, setEncouragementText] = useState<string | null>(null);
+  const latestEncouragement = chat.messages
+    .filter((message) =>
+      message.messageType === 'encouragement' &&
+      message.receiverRole === 'owner' &&
+      !message.recalledAt &&
+      message.content)
+    .at(-1) ?? null;
+  const shownEncouragementIdRef = useRef(latestEncouragement?.messageId ?? null);
   const template = getWorkoutTemplate(session.kind, session.templateVersion ?? 1);
   const exerciseIndex = Math.min(session.currentExerciseIndex, template.exercises.length - 1);
   const exercise = template.exercises[exerciseIndex];
@@ -227,6 +257,16 @@ function ActiveWorkout({ session }: ActiveWorkoutProps) {
     setShowTechnique(false);
   }, [exercise.id]);
 
+  useEffect(() => {
+    if (!latestEncouragement || shownEncouragementIdRef.current === latestEncouragement.messageId) {
+      return;
+    }
+    shownEncouragementIdRef.current = latestEncouragement.messageId;
+    setEncouragementText(latestEncouragement.content);
+    const timer = setTimeout(() => setEncouragementText(null), 4_500);
+    return () => clearTimeout(timer);
+  }, [latestEncouragement]);
+
   if (!exerciseLog) {
     return null;
   }
@@ -250,14 +290,7 @@ function ActiveWorkout({ session }: ActiveWorkoutProps) {
     void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Medium);
   };
 
-  const updateWorkoutSet = (setLog: SetLog, patch: Partial<SetLog>) => {
-    if (
-      patch.completed === false &&
-      session.restTimer?.exerciseId === exercise.id &&
-      session.restTimer.setIndex === setLog.index
-    ) {
-      skipRest(session.id);
-    }
+  const updateWorkoutSet = (setLog: SetLog, patch: SetLogPatch) => {
     updateSet(session.id, exercise.id, setLog.index, patch);
   };
 
@@ -268,6 +301,13 @@ function ActiveWorkout({ session }: ActiveWorkoutProps) {
         title="训练进行中"
         action={{ label: '结束训练', icon: CircleCheckBig, onPress: requestFinish }}
       />
+
+      {encouragementText ? (
+        <View pointerEvents="none" style={styles.encouragementToast}>
+          <Heart color={colors.white} fill={colors.white} size={20} />
+          <Text style={styles.encouragementToastText}>{encouragementText}</Text>
+        </View>
+      ) : null}
 
       <View style={styles.sessionPanel}>
         <View style={styles.sessionTimeRow}>
@@ -810,6 +850,17 @@ const styles = StyleSheet.create({
   painTextActive: {
     color: colors.white,
   },
+  encouragementToast: {
+    position: 'absolute', top: 76, left: 18, right: 18, zIndex: 20,
+    paddingHorizontal: 14, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', gap: 9,
+    borderRadius: 12, backgroundColor: colors.coral,
+    shadowColor: '#000', shadowOpacity: 0.18, shadowRadius: 10, shadowOffset: { width: 0, height: 4 },
+    elevation: 6,
+  },
+  encouragementToastText: { flex: 1, color: colors.white, fontSize: 13, fontWeight: '800', lineHeight: 18 },
+  controlDisabled: {
+    opacity: 0.45,
+  },
   stepperRow: {
     marginTop: 15,
     flexDirection: 'row',
@@ -856,6 +907,21 @@ const styles = StyleSheet.create({
   },
   setAction: {
     marginTop: 16,
+  },
+  completedSetStatus: {
+    minHeight: 50,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    borderRadius: 8,
+    backgroundColor: colors.softTeal,
+  },
+  completedSetStatusText: {
+    color: colors.teal,
+    fontSize: 14,
+    fontWeight: '800',
+    letterSpacing: 0,
   },
   exerciseNavigation: {
     paddingHorizontal: 16,

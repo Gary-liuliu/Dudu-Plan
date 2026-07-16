@@ -1,11 +1,6 @@
 import { createRealtimeMessage } from '../domain/realtimeProtocol';
-import type { WorkoutPushEvent } from './accountApi';
 import type { OwnerSyncMetadata } from './ownerSyncStorage';
-import type {
-  AppRole,
-  RealtimeConnectionState,
-  WorkoutSession,
-} from '../types';
+import type { AppRole, RealtimeConnectionState, WorkoutSession } from '../types';
 
 export const maximumRealtimeMessageBytes = 64 * 1_024;
 export const maximumSnapshotSessionsPerMessage = 8;
@@ -13,6 +8,7 @@ export const maximumSnapshotSessionsPerMessage = 8;
 interface SnapshotMessageOptions {
   maximumBytes?: number;
   maximumSessions?: number;
+  snapshotId?: string;
 }
 
 interface RealtimePresenceState {
@@ -20,10 +16,22 @@ interface RealtimePresenceState {
   observerConnected: boolean;
 }
 
-function serializeSnapshotMessage(sessions: WorkoutSession[]): string {
+function createSnapshotId(): string {
+  return `${Date.now()}-${Math.random().toString(36).slice(2, 12)}`;
+}
+
+function serializeSnapshotChunk(
+  snapshotId: string,
+  chunkIndex: number,
+  chunkCount: number,
+  sessions: WorkoutSession[],
+): string {
   return JSON.stringify(createRealtimeMessage({
     type: 'snapshot',
-    payload: { sessions },
+    snapshotId,
+    chunkIndex,
+    chunkCount,
+    sessions,
   }));
 }
 
@@ -37,42 +45,52 @@ export function createOwnerSnapshotMessages(
 ): string[] {
   const maximumBytes = options.maximumBytes ?? maximumRealtimeMessageBytes;
   const maximumSessions = options.maximumSessions ?? maximumSnapshotSessionsPerMessage;
-  const messages: string[] = [];
-  let currentBatch: WorkoutSession[] = [];
+  const snapshotId = options.snapshotId ?? createSnapshotId();
+  const chunks: WorkoutSession[][] = [];
+  let currentChunk: WorkoutSession[] = [];
 
-  const appendBatch = (batch: WorkoutSession[]) => {
-    const message = serializeSnapshotMessage(batch);
-    if (getRealtimeMessageByteLength(message) > maximumBytes) {
+  const appendChunk = (chunk: WorkoutSession[]) => {
+    const provisionalMessage = serializeSnapshotChunk(snapshotId, 9_999, 9_999, chunk);
+    if (getRealtimeMessageByteLength(provisionalMessage) > maximumBytes) {
       throw new Error('单条训练记录超过实时同步大小限制。');
     }
-    messages.push(message);
+    chunks.push(chunk);
   };
 
   for (const session of sessions) {
-    if (currentBatch.length >= maximumSessions) {
-      appendBatch(currentBatch);
-      currentBatch = [];
+    if (currentChunk.length >= maximumSessions) {
+      appendChunk(currentChunk);
+      currentChunk = [];
     }
 
-    const candidateBatch = [...currentBatch, session];
-    const candidateMessage = serializeSnapshotMessage(candidateBatch);
-    if (getRealtimeMessageByteLength(candidateMessage) <= maximumBytes) {
-      currentBatch = candidateBatch;
+    const candidateChunk = [...currentChunk, session];
+    if (
+      getRealtimeMessageByteLength(
+        serializeSnapshotChunk(snapshotId, 9_999, 9_999, candidateChunk),
+      ) <= maximumBytes
+    ) {
+      currentChunk = candidateChunk;
       continue;
     }
 
-    if (currentBatch.length > 0) {
-      appendBatch(currentBatch);
-      currentBatch = [];
+    if (currentChunk.length > 0) {
+      appendChunk(currentChunk);
+      currentChunk = [];
     }
-    appendBatch([session]);
+    appendChunk([session]);
   }
 
-  if (currentBatch.length > 0 || messages.length === 0) {
-    appendBatch(currentBatch);
+  if (currentChunk.length > 0 || chunks.length === 0) {
+    appendChunk(currentChunk);
   }
 
-  return messages;
+  return chunks.map((chunk, chunkIndex) => {
+    const message = serializeSnapshotChunk(snapshotId, chunkIndex, chunks.length, chunk);
+    if (getRealtimeMessageByteLength(message) > maximumBytes) {
+      throw new Error('快照分片超过实时同步大小限制。');
+    }
+    return message;
+  });
 }
 
 export function initializeOwnerSyncMetadata(
@@ -116,37 +134,19 @@ export function markNotificationEventHandled(
   };
 }
 
-export function getSendableWorkoutPushEvents(
-  pendingEvents: Array<{ event: WorkoutPushEvent; expired: boolean }>,
-): WorkoutPushEvent[] {
-  return pendingEvents
-    .filter(({ expired }) => !expired)
-    .map(({ event }) => event);
-}
-
 export function getRealtimePresenceState(
   role: AppRole,
-  roles: { owner: boolean; observer: boolean },
+  ownerOnline: boolean,
+  observerOnline: boolean,
 ): RealtimePresenceState {
   return role === 'owner'
-    ? { connectionState: 'online', observerConnected: roles.observer }
+    ? { connectionState: 'online', observerConnected: observerOnline }
     : {
-        connectionState: roles.owner ? 'online' : 'offline',
+        connectionState: ownerOnline ? 'online' : 'offline',
         observerConnected: false,
       };
 }
 
 export function shouldReconnectRealtimeSocket(closeCode: number): boolean {
   return closeCode !== 4_001;
-}
-
-export function beginNotificationEvent(
-  inFlightEventIds: Set<string>,
-  eventId: string,
-): boolean {
-  if (inFlightEventIds.size > 0) {
-    return false;
-  }
-  inFlightEventIds.add(eventId);
-  return true;
 }

@@ -3,7 +3,7 @@ import * as SecureStore from 'expo-secure-store';
 import { parseAuthSession } from '../domain/authSession';
 import type { AuthSession } from '../types';
 
-const authStorageKey = 'dudu-plan-auth-session-v1';
+const authStorageKey = 'dudu-plan-auth-session-v2';
 
 export async function loadAuthSession(): Promise<AuthSession | null> {
   try {
