@@ -96,6 +96,7 @@ function AppShell() {
         <ObserverScreen
           connectionState={realtime.connectionState}
           lastSyncedAt={realtime.lastSyncedAt}
+          ownerConnected={realtime.ownerConnected}
           onOpenChat={() => setChatOpen(true)}
           onLogout={() => {
             void account.logout()

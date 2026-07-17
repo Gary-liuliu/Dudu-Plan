@@ -5,6 +5,7 @@ import {
   initializeOwnerSyncMetadata,
   markNotificationEventHandled,
   maximumRealtimeMessageBytes,
+  shouldSendOwnerSnapshot,
   shouldReconnectRealtimeSocket,
 } from './realtime';
 import { getPendingWorkoutPushEvents } from '../domain/sync';
@@ -101,11 +102,27 @@ assertEqual(handledTwice.handledNotificationEventIds.length, 2, '通知事件 ID
 assertEqual(handledTwice, handledOnce, '重复确认不得创建新的元数据版本');
 
 const ownerPresence = getRealtimePresenceState('owner', true, true);
-assertEqual(ownerPresence.connectionState, 'online', '嘟嘟连接成功后 presence 不得误标离线');
+assertEqual(ownerPresence.peerConnected, true, '嘟嘟应识别肚肚在线');
 assertEqual(ownerPresence.observerConnected, true, '嘟嘟应看到肚肚在线');
 const observerPresence = getRealtimePresenceState('observer', false, true);
-assertEqual(observerPresence.connectionState, 'offline', '肚肚应以嘟嘟是否在线作为实时状态');
+assertEqual(observerPresence.peerConnected, false, '肚肚应单独记录嘟嘟是否在线');
 assertEqual(observerPresence.observerConnected, false, '肚肚界面不应声明另一个观察端在线');
+
+assertEqual(
+  shouldSendOwnerSnapshot(false, true, false),
+  true,
+  '肚肚从离线变在线时必须发送快照，不能只依赖服务端请求标记',
+);
+assertEqual(
+  shouldSendOwnerSnapshot(true, true, false),
+  false,
+  '重复 presence 不应无条件重复发送快照',
+);
+assertEqual(
+  shouldSendOwnerSnapshot(true, true, true),
+  true,
+  '服务端明确请求快照时必须响应',
+);
 
 assertEqual(shouldReconnectRealtimeSocket(1_006), true, '普通断网应自动重连');
 assertEqual(shouldReconnectRealtimeSocket(4_001), false, '同角色被新连接替换后不得抢回连接');

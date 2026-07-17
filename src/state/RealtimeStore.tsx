@@ -36,6 +36,7 @@ import {
   getRealtimePresenceState,
   initializeOwnerSyncMetadata,
   markNotificationEventHandled,
+  shouldSendOwnerSnapshot,
   shouldReconnectRealtimeSocket,
 } from '../services/realtime';
 import type {
@@ -50,6 +51,7 @@ import { useAppStore } from './AppStore';
 interface RealtimeStoreValue {
   connectionState: RealtimeConnectionState;
   chatReady: boolean;
+  ownerConnected: boolean;
   observerConnected: boolean;
   observerSessions: WorkoutSession[];
   lastSyncedAt: string | null;
@@ -89,6 +91,7 @@ export function RealtimeStoreProvider({ children }: { children: ReactNode }) {
   const { data, hydrated: appHydrated } = useAppStore();
   const [connectionState, setConnectionState] = useState<RealtimeConnectionState>('offline');
   const [chatReady, setChatReady] = useState(false);
+  const [ownerConnected, setOwnerConnected] = useState(false);
   const [observerConnected, setObserverConnected] = useState(false);
   const [observerCache, setObserverCache] = useState<ObserverCache>(initialObserverCache);
   const [observerCacheHydrated, setObserverCacheHydrated] = useState(false);
@@ -329,6 +332,7 @@ export function RealtimeStoreProvider({ children }: { children: ReactNode }) {
       : role === 'observer' && observerCacheHydrated;
     if (!role || !ready) {
       setConnectionState('offline');
+      setOwnerConnected(false);
       setObserverConnected(false);
       return;
     }
@@ -430,27 +434,37 @@ export function RealtimeStoreProvider({ children }: { children: ReactNode }) {
           }
           authenticatedSocketRef.current = socket;
           setChatReady(true);
+          setConnectionState('online');
           sentWorkoutEventIdsRef.current.clear();
           if (role === 'owner') {
-            setConnectionState('online');
             sendPendingWorkoutEvents();
           }
           return;
         }
 
         if (message.type === 'presence') {
+          const observerWasOnline = observerOnlineRef.current;
           const presenceState = getRealtimePresenceState(
             role,
             message.ownerOnline,
             message.observerOnline,
           );
-          setConnectionState(presenceState.connectionState);
+          if (role === 'observer') {
+            setOwnerConnected(presenceState.peerConnected);
+          }
           setObserverConnected(presenceState.observerConnected);
           observerOnlineRef.current = message.observerOnline;
           if (!message.observerOnline) {
             sentWorkoutEventIdsRef.current.clear();
           }
-          if (role === 'owner' && message.requestSnapshot) {
+          if (
+            role === 'owner' &&
+            shouldSendOwnerSnapshot(
+              observerWasOnline,
+              message.observerOnline,
+              message.requestSnapshot === true,
+            )
+          ) {
             sendOwnerSnapshot();
           }
           if (role === 'owner' && message.observerOnline) {
@@ -516,6 +530,7 @@ export function RealtimeStoreProvider({ children }: { children: ReactNode }) {
         setChatReady(false);
         observerOnlineRef.current = false;
         setConnectionState('offline');
+        setOwnerConnected(false);
         setObserverConnected(false);
         if (shouldReconnectRealtimeSocket(event.code)) {
           scheduleReconnect();
@@ -538,6 +553,7 @@ export function RealtimeStoreProvider({ children }: { children: ReactNode }) {
       authenticatedSocketRef.current = null;
       setChatReady(false);
       observerOnlineRef.current = false;
+      setOwnerConnected(false);
       socket?.close();
     };
   }, [
@@ -588,6 +604,7 @@ export function RealtimeStoreProvider({ children }: { children: ReactNode }) {
     () => ({
       connectionState,
       chatReady,
+      ownerConnected,
       observerConnected,
       observerSessions: observerCache.sessions,
       lastSyncedAt: observerCache.lastSyncedAt,
@@ -595,7 +612,16 @@ export function RealtimeStoreProvider({ children }: { children: ReactNode }) {
       chatError,
       sendChatMessage,
     }),
-    [chatError, chatEvent, chatReady, connectionState, observerCache, observerConnected, sendChatMessage],
+    [
+      chatError,
+      chatEvent,
+      chatReady,
+      connectionState,
+      observerCache,
+      observerConnected,
+      ownerConnected,
+      sendChatMessage,
+    ],
   );
 
   return <RealtimeStoreContext.Provider value={value}>{children}</RealtimeStoreContext.Provider>;

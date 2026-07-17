@@ -3,7 +3,7 @@
     "name": "嘟嘟计划",
     "slug": "dudu-plan",
     "owner": "egokaka",
-    "version": "1.2.1",
+    "version": "1.2.3",
     "orientation": "portrait",
     "icon": "./assets/icon-dudu.png",
     "scheme": "dudu-plan",
@@ -23,7 +23,7 @@
     },
     "android": {
       "package": "com.duduplan.app",
-      "versionCode": 5,
+      "versionCode": 7,
       "permissions": [
         "SCHEDULE_EXACT_ALARM"
       ],

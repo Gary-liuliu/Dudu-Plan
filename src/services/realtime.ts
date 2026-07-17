@@ -1,6 +1,6 @@
 import { createRealtimeMessage } from '../domain/realtimeProtocol';
 import type { OwnerSyncMetadata } from './ownerSyncStorage';
-import type { AppRole, RealtimeConnectionState, WorkoutSession } from '../types';
+import type { AppRole, WorkoutSession } from '../types';
 
 export const maximumRealtimeMessageBytes = 64 * 1_024;
 export const maximumSnapshotSessionsPerMessage = 8;
@@ -12,7 +12,7 @@ interface SnapshotMessageOptions {
 }
 
 interface RealtimePresenceState {
-  connectionState: RealtimeConnectionState;
+  peerConnected: boolean;
   observerConnected: boolean;
 }
 
@@ -140,11 +140,19 @@ export function getRealtimePresenceState(
   observerOnline: boolean,
 ): RealtimePresenceState {
   return role === 'owner'
-    ? { connectionState: 'online', observerConnected: observerOnline }
+    ? { peerConnected: observerOnline, observerConnected: observerOnline }
     : {
-        connectionState: ownerOnline ? 'online' : 'offline',
+        peerConnected: ownerOnline,
         observerConnected: false,
       };
+}
+
+export function shouldSendOwnerSnapshot(
+  observerWasOnline: boolean,
+  observerOnline: boolean,
+  snapshotRequested: boolean,
+): boolean {
+  return observerOnline && (!observerWasOnline || snapshotRequested);
 }
 
 export function shouldReconnectRealtimeSocket(closeCode: number): boolean {

@@ -48,6 +48,7 @@ export interface ObserverScreenProps {
   sessions: WorkoutSession[];
   connectionState: 'connecting' | 'online' | 'offline';
   lastSyncedAt: string | null;
+  ownerConnected: boolean;
   onLogout: () => void;
   onOpenChat: () => void;
   unreadCount: number;
@@ -344,6 +345,7 @@ export function ObserverScreen({
   sessions,
   connectionState,
   lastSyncedAt,
+  ownerConnected,
   onLogout,
   onOpenChat,
   unreadCount,
@@ -392,7 +394,7 @@ export function ObserverScreen({
     ? sessions.find((session) => session.id === selectedSessionId) ?? null
     : null;
   const lastSyncedAtMs = lastSyncedAt ? Date.parse(lastSyncedAt) : Number.NaN;
-  const sessionClockMs = connectionState === 'offline' && Number.isFinite(lastSyncedAtMs)
+  const sessionClockMs = (!ownerConnected || connectionState === 'offline') && Number.isFinite(lastSyncedAtMs)
     ? lastSyncedAtMs
     : nowMs;
 
@@ -426,6 +428,9 @@ export function ObserverScreen({
             <View style={styles.connectionRow}>
               <View style={[styles.connectionDot, { backgroundColor: connectionColor }]} />
               <Text style={styles.connectionText}>{connectionLabel}</Text>
+              {connectionState === 'online' ? (
+                <Text style={styles.syncText}>· 嘟嘟{ownerConnected ? '在线' : '未在线'}</Text>
+              ) : null}
               <Text style={styles.syncText}>· {formatSyncLabel(lastSyncedAt)}</Text>
             </View>
           </View>
@@ -505,12 +510,20 @@ export function ObserverScreen({
               </Pressable>
               <View style={styles.liveActions}>
                 <Pressable
-                  disabled={connectionState !== 'online' || nowMs - lastEncouragementAt < 3_000}
+                  disabled={
+                    connectionState !== 'online' ||
+                    !ownerConnected ||
+                    nowMs - lastEncouragementAt < 3_000
+                  }
                   onPress={() => setEncouragementPickerVisible(true)}
                   style={({ pressed }) => [
                     styles.liveActionButton,
                     styles.encouragementButton,
-                    (connectionState !== 'online' || nowMs - lastEncouragementAt < 3_000) && styles.disabledAction,
+                    (
+                      connectionState !== 'online' ||
+                      !ownerConnected ||
+                      nowMs - lastEncouragementAt < 3_000
+                    ) && styles.disabledAction,
                     pressed && styles.pressed,
                   ]}
                 >
@@ -534,7 +547,11 @@ export function ObserverScreen({
             <View style={styles.idleBand}>
               <Text style={styles.idleTitle}>现在没有训练</Text>
               <Text style={styles.idleText}>
-                {connectionState === 'offline' ? '恢复连接后会继续同步' : '开始训练后会显示实时进度'}
+                {connectionState === 'offline'
+                  ? '恢复连接后会继续同步'
+                  : ownerConnected
+                    ? '开始训练后会显示实时进度'
+                    : '已连接，嘟嘟暂未打开 App'}
               </Text>
             </View>
           )}
