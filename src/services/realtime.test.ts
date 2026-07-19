@@ -2,9 +2,13 @@ import {
   createOwnerSnapshotMessages,
   getRealtimePresenceState,
   getRealtimeMessageByteLength,
+  initialRealtimeDiagnosticsState,
   initializeOwnerSyncMetadata,
   markNotificationEventHandled,
   maximumRealtimeMessageBytes,
+  reduceRealtimeDiagnostics,
+  resolveRealtimeDisconnectReason,
+  shouldForceRefreshRealtimeToken,
   shouldSendOwnerSnapshot,
   shouldReconnectRealtimeSocket,
 } from './realtime';
@@ -126,6 +130,44 @@ assertEqual(
 
 assertEqual(shouldReconnectRealtimeSocket(1_006), true, '普通断网应自动重连');
 assertEqual(shouldReconnectRealtimeSocket(4_001), false, '同角色被新连接替换后不得抢回连接');
+assertEqual(shouldReconnectRealtimeSocket(4_004), false, '角色不匹配必须重新登录而不是循环重连');
+assertEqual(shouldForceRefreshRealtimeToken(4_003), true, '认证失败重连前必须强制刷新 Access Token');
+assertEqual(shouldForceRefreshRealtimeToken(1_006), false, '普通断网不得无条件刷新 Access Token');
+
+assertEqual(
+  resolveRealtimeDisconnectReason('', 'connection_timeout'),
+  'connection_timeout',
+  '本地断线原因必须补充空白的 WebSocket 关闭原因',
+);
+assertEqual(
+  resolveRealtimeDisconnectReason('authentication_failed', 'websocket_error'),
+  'authentication_failed',
+  '服务端关闭原因必须优先于本地兜底原因',
+);
+const disconnectedDiagnostics = reduceRealtimeDiagnostics(initialRealtimeDiagnosticsState, {
+  type: 'disconnect',
+  code: 4_003,
+  reason: 'authentication_failed',
+  occurredAt: 123,
+});
+assertEqual(disconnectedDiagnostics.lastDisconnect?.code, 4_003, '断线码必须保留');
+assertEqual(disconnectedDiagnostics.lastDisconnect?.occurredAt, 123, '断线时间必须保留');
+const reconnectedOnceDiagnostics = reduceRealtimeDiagnostics(disconnectedDiagnostics, {
+  type: 'reconnect_scheduled',
+});
+const reconnectedTwiceDiagnostics = reduceRealtimeDiagnostics(reconnectedOnceDiagnostics, {
+  type: 'reconnect_scheduled',
+});
+assertEqual(reconnectedTwiceDiagnostics.reconnectCount, 2, '每次真正安排重连必须累计一次');
+const resetDiagnostics = reduceRealtimeDiagnostics(reconnectedTwiceDiagnostics, {
+  type: 'session_reset',
+});
+assertEqual(
+  resetDiagnostics.reconnectCount,
+  0,
+  '退出或切换角色后必须清空重连次数',
+);
+assertEqual(resetDiagnostics.lastDisconnect, null, '新登录不得继承上一账号的断线原因');
 
 const oldCompletedSessions = Array.from({ length: 101 }, (_, index) => ({
   ...createSession(`old-${index}`),

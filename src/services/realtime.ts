@@ -5,6 +5,27 @@ import type { AppRole, WorkoutSession } from '../types';
 export const maximumRealtimeMessageBytes = 64 * 1_024;
 export const maximumSnapshotSessionsPerMessage = 8;
 
+export interface RealtimeDisconnectDetails {
+  code: number | null;
+  reason: string;
+  occurredAt: number;
+}
+
+export interface RealtimeDiagnosticsState {
+  lastDisconnect: RealtimeDisconnectDetails | null;
+  reconnectCount: number;
+}
+
+export type RealtimeDiagnosticsAction =
+  | { type: 'disconnect'; code: number | null; reason: string; occurredAt: number }
+  | { type: 'reconnect_scheduled' }
+  | { type: 'session_reset' };
+
+export const initialRealtimeDiagnosticsState: RealtimeDiagnosticsState = {
+  lastDisconnect: null,
+  reconnectCount: 0,
+};
+
 interface SnapshotMessageOptions {
   maximumBytes?: number;
   maximumSessions?: number;
@@ -37,6 +58,39 @@ function serializeSnapshotChunk(
 
 export function getRealtimeMessageByteLength(message: string): number {
   return new TextEncoder().encode(message).byteLength;
+}
+
+export function resolveRealtimeDisconnectReason(
+  closeReason: string | null | undefined,
+  localReason: string | null = null,
+): string {
+  const normalizedCloseReason = closeReason?.trim();
+  if (normalizedCloseReason) {
+    return normalizedCloseReason;
+  }
+  const normalizedLocalReason = localReason?.trim();
+  return normalizedLocalReason || 'websocket_closed';
+}
+
+export function reduceRealtimeDiagnostics(
+  state: RealtimeDiagnosticsState,
+  action: RealtimeDiagnosticsAction,
+): RealtimeDiagnosticsState {
+  switch (action.type) {
+    case 'disconnect':
+      return {
+        ...state,
+        lastDisconnect: {
+          code: action.code,
+          reason: resolveRealtimeDisconnectReason(action.reason),
+          occurredAt: action.occurredAt,
+        },
+      };
+    case 'reconnect_scheduled':
+      return { ...state, reconnectCount: state.reconnectCount + 1 };
+    case 'session_reset':
+      return initialRealtimeDiagnosticsState;
+  }
 }
 
 export function createOwnerSnapshotMessages(
@@ -156,5 +210,9 @@ export function shouldSendOwnerSnapshot(
 }
 
 export function shouldReconnectRealtimeSocket(closeCode: number): boolean {
-  return closeCode !== 4_001;
+  return closeCode !== 4_001 && closeCode !== 4_004;
+}
+
+export function shouldForceRefreshRealtimeToken(closeCode: number): boolean {
+  return closeCode === 4_003;
 }

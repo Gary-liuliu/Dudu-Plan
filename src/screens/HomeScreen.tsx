@@ -11,6 +11,7 @@ import {
   getWeekSchedule,
 } from '../domain/dateTime';
 import { useAppStore } from '../state/AppStore';
+import { useRealtimeStore } from '../state/RealtimeStore';
 import { colors } from '../theme';
 import type { AppTab } from '../types';
 
@@ -24,6 +25,7 @@ const weekdayLabels = ['日', '一', '二', '三', '四', '五', '六'];
 
 export function HomeScreen({ onNavigate, onOpenChat, unreadCount }: HomeScreenProps) {
   const { data, activeSession, startWorkout } = useAppStore();
+  const { connectionState } = useRealtimeStore();
   const [now, setNow] = useState(() => new Date());
   const todayState = useMemo(
     () => getTodayWorkoutState(now, data.sessions, data.profile),
@@ -68,6 +70,16 @@ export function HomeScreen({ onNavigate, onOpenChat, unreadCount }: HomeScreenPr
           : '查看训练计划';
 
   const todayDateKey = getLocalDateKey(now);
+  const connectionLabel = connectionState === 'online'
+    ? '本机在线'
+    : connectionState === 'connecting'
+      ? '本机连接中'
+      : '本机离线';
+  const connectionColor = connectionState === 'online'
+    ? colors.teal
+    : connectionState === 'connecting'
+      ? colors.yellow
+      : 'rgba(255,255,255,0.58)';
 
   return (
     <ScrollView
@@ -85,11 +97,17 @@ export function HomeScreen({ onNavigate, onOpenChat, unreadCount }: HomeScreenPr
           <View style={styles.logoMark}>
             <Dumbbell color={colors.white} size={22} strokeWidth={2.5} />
           </View>
-          <View>
+          <View style={styles.brandCopy}>
             <Text style={styles.brand}>嘟嘟计划</Text>
-            <Text style={styles.dateText}>
-              {now.getMonth() + 1}月{now.getDate()}日 · 周{weekdayLabels[now.getDay()]}
-            </Text>
+            <View style={styles.dateStatusRow}>
+              <Text style={styles.dateText}>
+                {now.getMonth() + 1}月{now.getDate()}日 · 周{weekdayLabels[now.getDay()]}
+              </Text>
+              <View style={styles.connectionStatus}>
+                <View style={[styles.connectionDot, { backgroundColor: connectionColor }]} />
+                <Text style={styles.connectionText}>{connectionLabel}</Text>
+              </View>
+            </View>
           </View>
           <Pressable accessibilityLabel="打开聊天" onPress={onOpenChat} style={styles.chatButton}>
             <MessageCircle color={colors.white} size={22} strokeWidth={2.4} />
@@ -216,6 +234,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 10,
   },
+  brandCopy: {
+    flex: 1,
+    minWidth: 0,
+  },
   chatButton: {
     width: 42,
     height: 42,
@@ -254,11 +276,32 @@ const styles = StyleSheet.create({
     fontWeight: '900',
     letterSpacing: 0,
   },
-  dateText: {
+  dateStatusRow: {
     marginTop: 2,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  dateText: {
     color: 'rgba(255,255,255,0.86)',
     fontSize: 12,
     fontWeight: '700',
+    letterSpacing: 0,
+  },
+  connectionStatus: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+  },
+  connectionDot: {
+    width: 7,
+    height: 7,
+    borderRadius: 4,
+  },
+  connectionText: {
+    color: 'rgba(255,255,255,0.9)',
+    fontSize: 10,
+    fontWeight: '800',
     letterSpacing: 0,
   },
   heroCopy: {

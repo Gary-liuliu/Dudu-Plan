@@ -12,6 +12,7 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { IconButton } from '../components/IconButton';
 import { ProgressBar } from '../components/ProgressBar';
 import { ScreenHeader } from '../components/ScreenHeader';
+import { nutritionTips } from '../data/nutritionTips';
 import { useAppStore } from '../state/AppStore';
 import { colors } from '../theme';
 
@@ -27,7 +28,7 @@ export function NutritionScreen() {
     undoProtein,
     undoWater,
   } = useAppStore();
-  const [showTakeoutTips, setShowTakeoutTips] = useState(false);
+  const [expandedTipId, setExpandedTipId] = useState<string | null>(null);
   const waterTotal = useMemo(
     () => todayNutrition.waterEntries.reduce((sum, entry) => sum + entry.amount, 0),
     [todayNutrition.waterEntries],
@@ -137,29 +138,63 @@ export function NutritionScreen() {
         </View>
       </View>
 
-      <View style={styles.takeoutSection}>
-        <Pressable
-          accessibilityRole="button"
-          accessibilityLabel={showTakeoutTips ? '收起外卖建议' : '展开外卖建议'}
-          accessibilityState={{ expanded: showTakeoutTips }}
-          onPress={() => setShowTakeoutTips((visible) => !visible)}
-          style={({ pressed }) => [styles.takeoutToggle, pressed && styles.pressed]}
-        >
-          <View style={styles.takeoutTitleRow}>
-            <Utensils color={colors.teal} size={19} strokeWidth={2.3} />
-            <Text style={styles.takeoutTitle}>外卖怎么点</Text>
+      <View style={styles.tipsSection} testID="nutrition-tips-list">
+        <View style={styles.tipsHeading}>
+          <View style={styles.tipsIconBox}>
+            <Utensils color={colors.teal} size={20} strokeWidth={2.3} />
           </View>
-          {showTakeoutTips ? (
-            <ChevronUp color={colors.inkMuted} size={19} strokeWidth={2.3} />
-          ) : (
-            <ChevronDown color={colors.inkMuted} size={19} strokeWidth={2.3} />
-          )}
-        </Pressable>
-        {showTakeoutTips ? (
-          <Text style={styles.takeoutText}>
-            一份瘦肉或海鲜 + 一份绿叶菜 + 一份米饭。优先白切鸡去皮、卤牛肉、清蒸鱼和虾仁滑蛋，备注少油少酱。
-          </Text>
-        ) : null}
+          <View style={styles.tipsHeadingCopy}>
+            <Text style={styles.tipsTitle}>减脂增肌小技巧</Text>
+            <Text style={styles.tipsSubtitle}>点开一条，马上照着做</Text>
+          </View>
+        </View>
+
+        {nutritionTips.map((tip) => {
+          const isExpanded = expandedTipId === tip.id;
+          const isFeaturedTakeoutTip = tip.id === 'takeout';
+
+          return (
+            <View
+              key={tip.id}
+              style={[styles.tipItem, isFeaturedTakeoutTip && styles.featuredTipItem]}
+            >
+              <Pressable
+                accessibilityRole="button"
+                accessibilityLabel={isExpanded ? `收起${tip.title}技巧` : `展开${tip.title}技巧`}
+                accessibilityState={{ expanded: isExpanded }}
+                onPress={() => setExpandedTipId((currentTipId) => (
+                  currentTipId === tip.id ? null : tip.id
+                ))}
+                style={({ pressed }) => [styles.tipToggle, pressed && styles.pressed]}
+                testID={`nutrition-tip-toggle-${tip.id}`}
+              >
+                <View style={styles.tipCopy}>
+                  <Text style={styles.tipTitle}>{tip.title}</Text>
+                  <Text style={styles.tipSummary}>{tip.summary}</Text>
+                </View>
+                {isExpanded ? (
+                  <ChevronUp color={colors.inkMuted} size={19} strokeWidth={2.3} />
+                ) : (
+                  <ChevronDown color={colors.inkMuted} size={19} strokeWidth={2.3} />
+                )}
+              </Pressable>
+
+              {isExpanded ? (
+                <View
+                  style={styles.tipSuggestions}
+                  testID={`nutrition-tip-content-${tip.id}`}
+                >
+                  {tip.suggestions.map((suggestion, suggestionIndex) => (
+                    <View key={`${tip.id}-${suggestionIndex}`} style={styles.suggestionRow}>
+                      <Text style={styles.suggestionBullet}>•</Text>
+                      <Text selectable style={styles.suggestionText}>{suggestion}</Text>
+                    </View>
+                  ))}
+                </View>
+              ) : null}
+            </View>
+          );
+        })}
       </View>
     </ScrollView>
   );
@@ -251,31 +286,95 @@ const styles = StyleSheet.create({
   waterQuickText: {
     color: colors.blue,
   },
-  takeoutSection: {
+  tipsSection: {
     marginHorizontal: 20,
     marginTop: 22,
     borderTopColor: colors.line,
     borderTopWidth: 1,
   },
-  takeoutToggle: {
-    minHeight: 54,
+  tipsHeading: {
+    minHeight: 66,
+    paddingVertical: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 10,
   },
-  takeoutTitleRow: {
-    flexDirection: 'row',
+  tipsIconBox: {
+    width: 38,
+    height: 38,
     alignItems: 'center',
-    gap: 9,
+    justifyContent: 'center',
+    borderRadius: 8,
+    backgroundColor: colors.softTeal,
   },
-  takeoutTitle: {
+  tipsHeadingCopy: {
+    flex: 1,
+  },
+  tipsTitle: {
     color: colors.ink,
     fontSize: 15,
     fontWeight: '900',
     letterSpacing: 0,
   },
-  takeoutText: {
-    paddingBottom: 16,
+  tipsSubtitle: {
+    marginTop: 3,
+    color: colors.inkMuted,
+    fontSize: 11,
+    lineHeight: 16,
+    letterSpacing: 0,
+  },
+  tipItem: {
+    borderTopColor: colors.line,
+    borderTopWidth: StyleSheet.hairlineWidth,
+  },
+  featuredTipItem: {
+    marginBottom: 4,
+    borderTopWidth: 0,
+    borderRadius: 8,
+    backgroundColor: colors.softTeal,
+  },
+  tipToggle: {
+    minHeight: 68,
+    paddingHorizontal: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  tipCopy: {
+    flex: 1,
+    paddingVertical: 11,
+  },
+  tipTitle: {
+    color: colors.ink,
+    fontSize: 14,
+    fontWeight: '900',
+    letterSpacing: 0,
+  },
+  tipSummary: {
+    marginTop: 3,
+    color: colors.inkMuted,
+    fontSize: 12,
+    lineHeight: 17,
+    letterSpacing: 0,
+  },
+  tipSuggestions: {
+    paddingHorizontal: 12,
+    paddingBottom: 14,
+    gap: 8,
+  },
+  suggestionRow: {
+    flexDirection: 'row',
+    alignItems: 'flex-start',
+    gap: 8,
+  },
+  suggestionBullet: {
+    color: colors.teal,
+    fontSize: 15,
+    lineHeight: 20,
+    fontWeight: '900',
+  },
+  suggestionText: {
+    flex: 1,
     color: colors.inkMuted,
     fontSize: 13,
     lineHeight: 20,

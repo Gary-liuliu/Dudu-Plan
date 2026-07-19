@@ -1,6 +1,6 @@
 {
   "name": "dudu-plan",
-  "version": "1.2.3",
+  "version": "1.2.6",
   "main": "index.ts",
   "dependencies": {
     "@expo/metro-runtime": "~57.0.3",
@@ -33,7 +33,7 @@
     "ios": "expo start --ios",
     "web": "expo start --web",
     "typecheck": "node --stack-size=8192 ./node_modules/typescript/bin/tsc --noEmit",
-    "test": "tsx --test src/domain/dateTime.test.ts src/domain/progression.test.ts src/domain/bodyMetrics.test.ts src/domain/workoutPlan.test.ts src/domain/workoutSets.test.ts src/domain/sync.test.ts src/domain/authSession.test.ts src/services/accountApi.test.ts src/services/chatStorage.test.ts src/services/realtime.test.ts src/services/storage.test.ts",
+    "test": "tsx --test src/domain/dateTime.test.ts src/domain/progression.test.ts src/domain/bodyMetrics.test.ts src/domain/workoutPlan.test.ts src/domain/workoutSets.test.ts src/domain/sync.test.ts src/domain/authSession.test.ts src/data/nutritionTips.test.ts src/services/accountApi.test.ts src/services/chatStorage.test.ts src/services/realtime.test.ts src/services/storage.test.ts",
     "check": "npm run typecheck && npm run test",
     "relay:check": "npm --prefix relay run check",
     "relay:dev": "npm --prefix relay run dev",

@@ -59,6 +59,11 @@ export function ChatScreen({ onClose }: ChatScreenProps) {
   const role = session?.role;
   const listRef = useRef<FlatList<ChatMessage>>(null);
   const lastMessageId = chat.messages.at(-1)?.messageId ?? null;
+  const ownerConnectionLabel = realtime.connectionState === 'online'
+    ? '本机在线'
+    : realtime.connectionState === 'connecting'
+      ? '本机连接中'
+      : '本机离线';
   const replyMessage = useMemo(
     () => chat.messages.find((message) => message.messageId === replyToMessageId) ?? null,
     [chat.messages, replyToMessageId],
@@ -127,7 +132,11 @@ export function ChatScreen({ onClose }: ChatScreenProps) {
           <View style={styles.headerCopy}>
             <Text style={styles.title}>{role === 'owner' ? '肚肚' : '嘟嘟'}</Text>
             <Text style={styles.subtitle}>
-              {realtime.chatReady ? '只属于我们的聊天' : '正在连接，消息会自动发送'}
+              {role === 'owner'
+                ? `${ownerConnectionLabel} · 肚肚${realtime.observerConnected ? '已连接' : '未连接'}`
+                : realtime.chatReady
+                  ? '只属于我们的聊天'
+                  : '正在连接，消息会自动发送'}
             </Text>
           </View>
           <View style={styles.headerSpacer} />

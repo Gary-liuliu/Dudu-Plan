@@ -5,6 +5,7 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useReducer,
   useRef,
   useState,
 } from 'react';
@@ -34,10 +35,15 @@ import {
 import {
   createOwnerSnapshotMessages,
   getRealtimePresenceState,
+  initialRealtimeDiagnosticsState,
   initializeOwnerSyncMetadata,
   markNotificationEventHandled,
+  reduceRealtimeDiagnostics,
+  resolveRealtimeDisconnectReason,
+  shouldForceRefreshRealtimeToken,
   shouldSendOwnerSnapshot,
   shouldReconnectRealtimeSocket,
+  type RealtimeDisconnectDetails,
 } from '../services/realtime';
 import type {
   ChatMessageType,
@@ -55,6 +61,8 @@ interface RealtimeStoreValue {
   observerConnected: boolean;
   observerSessions: WorkoutSession[];
   lastSyncedAt: string | null;
+  lastDisconnect: RealtimeDisconnectDetails | null;
+  reconnectCount: number;
   chatEvent: { sequence: number; event: ChatServerRealtimeMessage } | null;
   chatError: { sequence: number; messageId: string | null; error: string } | null;
   sendChatMessage: (message: {
@@ -81,13 +89,16 @@ const initialObserverCache: ObserverCache = {
   handledWorkoutEventIds: [],
 };
 
+const realtimeAuthenticationTimeoutMs = 8_000;
+const realtimeConnectionTimeoutMs = 15_000;
+
 function isSocketOpen(socket: WebSocket | null): socket is WebSocket {
   return socket?.readyState === WebSocket.OPEN;
 }
 
 // [Function] Bridges local workout state with protocol v2. [Warning] Network failure must never block local training or overwrite newer cached sessions.
 export function RealtimeStoreProvider({ children }: { children: ReactNode }) {
-  const { session, getAccessToken } = useAccountStore();
+  const { session, getAccessToken, logout } = useAccountStore();
   const { data, hydrated: appHydrated } = useAppStore();
   const [connectionState, setConnectionState] = useState<RealtimeConnectionState>('offline');
   const [chatReady, setChatReady] = useState(false);
@@ -98,6 +109,10 @@ export function RealtimeStoreProvider({ children }: { children: ReactNode }) {
   const [ownerMetadata, setOwnerMetadata] = useState<OwnerSyncMetadata | null>(null);
   const [chatEvent, setChatEvent] = useState<RealtimeStoreValue['chatEvent']>(null);
   const [chatError, setChatError] = useState<RealtimeStoreValue['chatError']>(null);
+  const [realtimeDiagnostics, dispatchRealtimeDiagnostics] = useReducer(
+    reduceRealtimeDiagnostics,
+    initialRealtimeDiagnosticsState,
+  );
   const socketRef = useRef<WebSocket | null>(null);
   const authenticatedSocketRef = useRef<WebSocket | null>(null);
   const sessionsRef = useRef(data.sessions);
@@ -110,6 +125,16 @@ export function RealtimeStoreProvider({ children }: { children: ReactNode }) {
   const observerOnlineRef = useRef(false);
   const snapshotAssembliesRef = useRef(new Map<string, SnapshotAssembly>());
   const chatEventSequenceRef = useRef(0);
+  const diagnosticsRoleRef = useRef(session?.role ?? null);
+  const ownerMetadataReady = ownerMetadata !== null;
+
+  useEffect(() => {
+    const currentRole = session?.role ?? null;
+    if (diagnosticsRoleRef.current !== currentRole) {
+      diagnosticsRoleRef.current = currentRole;
+      dispatchRealtimeDiagnostics({ type: 'session_reset' });
+    }
+  }, [session?.role]);
 
   useEffect(() => {
     sessionsRef.current = data.sessions;
@@ -328,7 +353,7 @@ export function RealtimeStoreProvider({ children }: { children: ReactNode }) {
   useEffect(() => {
     const role = session?.role;
     const ready = role === 'owner'
-      ? appHydrated && ownerMetadata !== null
+      ? appHydrated && ownerMetadataReady
       : role === 'observer' && observerCacheHydrated;
     if (!role || !ready) {
       setConnectionState('offline');
@@ -340,52 +365,100 @@ export function RealtimeStoreProvider({ children }: { children: ReactNode }) {
     let cancelled = false;
     let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
     let heartbeatTimer: ReturnType<typeof setInterval> | null = null;
+    let authenticationTimer: ReturnType<typeof setTimeout> | null = null;
+    let connectionTimer: ReturnType<typeof setTimeout> | null = null;
     let reconnectDelayMs = 1_000;
+    let forceRefreshOnNextConnect = false;
+    let hasForcedTokenRefreshSinceAuthentication = false;
 
-    const scheduleReconnect = () => {
-      if (cancelled || reconnectTimer) {
+    const recordDisconnect = (code: number | null, reason: string) => {
+      dispatchRealtimeDiagnostics({
+        type: 'disconnect',
+        code,
+        reason,
+        occurredAt: Date.now(),
+      });
+    };
+
+    const scheduleReconnect = (forceRefreshAccessToken = false) => {
+      if (cancelled) {
         return;
       }
+      forceRefreshOnNextConnect ||= forceRefreshAccessToken;
+      if (reconnectTimer) {
+        return;
+      }
+      dispatchRealtimeDiagnostics({ type: 'reconnect_scheduled' });
       reconnectTimer = setTimeout(() => {
         reconnectTimer = null;
-        void connect();
+        const forceRefresh = forceRefreshOnNextConnect;
+        forceRefreshOnNextConnect = false;
+        void connect(forceRefresh);
       }, reconnectDelayMs);
       reconnectDelayMs = Math.min(reconnectDelayMs * 2, 30_000);
     };
 
-    const connect = async () => {
+    const connect = async (forceRefreshAccessToken = false) => {
       setConnectionState('connecting');
-      const accessToken = await getAccessToken();
+      const accessToken = await getAccessToken(forceRefreshAccessToken);
       if (cancelled) {
         return;
       }
       if (!accessToken) {
+        recordDisconnect(
+          null,
+          forceRefreshAccessToken ? 'token_refresh_unavailable' : 'access_token_unavailable',
+        );
         setConnectionState('offline');
-        scheduleReconnect();
+        scheduleReconnect(forceRefreshAccessToken);
         return;
       }
 
       let socket: WebSocket;
+      let localCloseReason: string | null = null;
       try {
         socket = new WebSocket(getRealtimeWebSocketUrl());
       } catch {
+        recordDisconnect(null, 'websocket_create_failed');
         setConnectionState('offline');
         scheduleReconnect();
         return;
       }
       socketRef.current = socket;
+      connectionTimer = setTimeout(() => {
+        if (socketRef.current !== socket || socket.readyState !== WebSocket.CONNECTING) {
+          return;
+        }
+        connectionTimer = null;
+        socketRef.current = null;
+        recordDisconnect(null, 'connection_timeout');
+        setConnectionState('offline');
+        scheduleReconnect();
+        try {
+          socket.close();
+        } catch {}
+      }, realtimeConnectionTimeoutMs);
 
       socket.onopen = () => {
         if (cancelled || socketRef.current !== socket) {
           socket.close();
           return;
         }
-        reconnectDelayMs = 1_000;
+        if (connectionTimer) {
+          clearTimeout(connectionTimer);
+          connectionTimer = null;
+        }
         socket.send(JSON.stringify({
           protocolVersion: realtimeProtocolVersion,
           type: 'authenticate',
           accessToken,
         }));
+        authenticationTimer = setTimeout(() => {
+          if (socketRef.current === socket && authenticatedSocketRef.current !== socket) {
+            localCloseReason = 'authentication_timeout';
+            socket.close(4_002, 'authentication_timeout');
+          }
+        }, realtimeAuthenticationTimeoutMs);
         heartbeatTimer = setInterval(() => {
           if (isSocketOpen(socket)) {
             socket.send(JSON.stringify(createRealtimeMessage({ type: 'heartbeat' })));
@@ -429,14 +502,23 @@ export function RealtimeStoreProvider({ children }: { children: ReactNode }) {
 
         if (message.type === 'authenticated') {
           if (message.role !== role) {
-            socket.close(4_003, 'role_mismatch');
+            localCloseReason = 'role_mismatch';
+            socket.close(4_004, 'role_mismatch');
+            void logout().catch(() => undefined);
             return;
           }
+          if (authenticationTimer) {
+            clearTimeout(authenticationTimer);
+            authenticationTimer = null;
+          }
+          reconnectDelayMs = 1_000;
+          hasForcedTokenRefreshSinceAuthentication = false;
           authenticatedSocketRef.current = socket;
           setChatReady(true);
           setConnectionState('online');
           sentWorkoutEventIdsRef.current.clear();
           if (role === 'owner') {
+            sendOwnerSnapshot();
             sendPendingWorkoutEvents();
           }
           return;
@@ -514,17 +596,30 @@ export function RealtimeStoreProvider({ children }: { children: ReactNode }) {
 
       socket.onerror = () => {
         if (socketRef.current === socket) {
+          localCloseReason ??= 'websocket_error';
           socket.close();
         }
       };
       socket.onclose = (event) => {
+        if (socketRef.current !== socket) {
+          return;
+        }
+        if (connectionTimer) {
+          clearTimeout(connectionTimer);
+          connectionTimer = null;
+        }
+        if (authenticationTimer) {
+          clearTimeout(authenticationTimer);
+          authenticationTimer = null;
+        }
         if (heartbeatTimer) {
           clearInterval(heartbeatTimer);
           heartbeatTimer = null;
         }
-        if (socketRef.current !== socket) {
-          return;
-        }
+        recordDisconnect(
+          typeof event.code === 'number' ? event.code : null,
+          resolveRealtimeDisconnectReason(event.reason, localCloseReason),
+        );
         socketRef.current = null;
         authenticatedSocketRef.current = null;
         setChatReady(false);
@@ -533,7 +628,11 @@ export function RealtimeStoreProvider({ children }: { children: ReactNode }) {
         setOwnerConnected(false);
         setObserverConnected(false);
         if (shouldReconnectRealtimeSocket(event.code)) {
-          scheduleReconnect();
+          const shouldForceRefresh =
+            shouldForceRefreshRealtimeToken(event.code) &&
+            !hasForcedTokenRefreshSinceAuthentication;
+          hasForcedTokenRefreshSinceAuthentication ||= shouldForceRefresh;
+          scheduleReconnect(shouldForceRefresh);
         }
       };
     };
@@ -548,6 +647,12 @@ export function RealtimeStoreProvider({ children }: { children: ReactNode }) {
       if (heartbeatTimer) {
         clearInterval(heartbeatTimer);
       }
+      if (authenticationTimer) {
+        clearTimeout(authenticationTimer);
+      }
+      if (connectionTimer) {
+        clearTimeout(connectionTimer);
+      }
       const socket = socketRef.current;
       socketRef.current = null;
       authenticatedSocketRef.current = null;
@@ -559,9 +664,10 @@ export function RealtimeStoreProvider({ children }: { children: ReactNode }) {
   }, [
     appHydrated,
     getAccessToken,
+    logout,
     mergeObserverCache,
     observerCacheHydrated,
-    ownerMetadata,
+    ownerMetadataReady,
     receiveSnapshotChunk,
     replaceObserverCache,
     replaceOwnerMetadata,
@@ -571,7 +677,8 @@ export function RealtimeStoreProvider({ children }: { children: ReactNode }) {
   ]);
 
   useEffect(() => {
-    if (session?.role !== 'owner' || !ownerMetadata) {
+    const metadata = ownerMetadataRef.current;
+    if (session?.role !== 'owner' || !ownerMetadataReady || !metadata) {
       return;
     }
 
@@ -580,7 +687,7 @@ export function RealtimeStoreProvider({ children }: { children: ReactNode }) {
       return;
     }
 
-    for (const workoutSession of getSyncEligibleSessions(data.sessions, ownerMetadata)) {
+    for (const workoutSession of getSyncEligibleSessions(data.sessions, metadata)) {
       if (sentSessionVersionsRef.current.get(workoutSession.id) === workoutSession.updatedAt) {
         continue;
       }
@@ -591,7 +698,7 @@ export function RealtimeStoreProvider({ children }: { children: ReactNode }) {
       sentSessionVersionsRef.current.set(workoutSession.id, workoutSession.updatedAt);
     }
     sendPendingWorkoutEvents();
-  }, [data.sessions, ownerMetadata, sendPendingWorkoutEvents, session?.role]);
+  }, [data.sessions, ownerMetadataReady, sendPendingWorkoutEvents, session?.role]);
 
   useEffect(() => () => {
     for (const assembly of snapshotAssembliesRef.current.values()) {
@@ -608,6 +715,8 @@ export function RealtimeStoreProvider({ children }: { children: ReactNode }) {
       observerConnected,
       observerSessions: observerCache.sessions,
       lastSyncedAt: observerCache.lastSyncedAt,
+      lastDisconnect: realtimeDiagnostics.lastDisconnect,
+      reconnectCount: realtimeDiagnostics.reconnectCount,
       chatEvent,
       chatError,
       sendChatMessage,
@@ -620,6 +729,7 @@ export function RealtimeStoreProvider({ children }: { children: ReactNode }) {
       observerCache,
       observerConnected,
       ownerConnected,
+      realtimeDiagnostics,
       sendChatMessage,
     ],
   );

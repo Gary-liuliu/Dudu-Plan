@@ -9,6 +9,7 @@ import {
   getWorkoutKindForDate,
   getWorkoutDurationSeconds,
 } from './dateTime';
+import { getWorkoutTemplate } from '../data/workoutPlan';
 import type { UserProfile, WorkoutSession } from '../types';
 
 function assertEqual<T>(actual: T, expected: T, message: string): void {
@@ -264,6 +265,20 @@ assertEqual(
   ).phase,
   'active',
   '跨日进行中的训练应拥有最高优先级',
+);
+
+const activeV2Session = { ...activeFromYesterday, id: 'active-v2', templateVersion: 2 };
+assertEqual(
+  getTodayWorkoutState(new Date(2026, 6, 13, 20), [activeV2Session], profile).template,
+  getWorkoutTemplate('upper-a', 2),
+  '旧版进行中训练必须继续使用自身模板版本',
+);
+
+const completedV2Session = { ...completedToday, id: 'completed-v2', templateVersion: 2 };
+assertEqual(
+  getTodayWorkoutState(new Date(2026, 6, 13, 20), [completedV2Session], profile).template,
+  getWorkoutTemplate('upper-a', 2),
+  '旧版完成记录必须继续使用自身模板版本',
 );
 
 assertEqual(

@@ -215,7 +215,7 @@ export function getTodayWorkoutState(
   );
 
   if (activeSession) {
-    const template = getWorkoutTemplate(activeSession.kind);
+    const template = getWorkoutTemplate(activeSession.kind, activeSession.templateVersion ?? 1);
     return {
       phase: 'active',
       template,
@@ -234,7 +234,7 @@ export function getTodayWorkoutState(
   );
 
   if (finishedSession) {
-    const template = getWorkoutTemplate(finishedSession.kind);
+    const template = getWorkoutTemplate(finishedSession.kind, finishedSession.templateVersion ?? 1);
     const isCompleted = finishedSession.status === 'completed';
     return {
       phase: isCompleted ? 'completed' : 'skipped',
@@ -288,7 +288,7 @@ export function getTodayWorkoutState(
       template,
       session: null,
       title: `${template.shortTitle} · 10 分钟后开始`,
-      detail: '准备好哑铃、臂力棒和饮用水。',
+      detail: '清出防滑空间，准备好哑铃、臂力棒、稳固椅和饮用水。',
     };
   }
 

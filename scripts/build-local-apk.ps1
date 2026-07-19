@@ -50,21 +50,23 @@ try {
     $credentials = Get-Content -Raw $credentialsJsonPath | ConvertFrom-Json
     $keystoreConfiguration = $credentials.android.keystore
     $keystoreSource = Join-Path $credentialsRoot $keystoreConfiguration.keystorePath
-    $keystoreDestination = Join-Path $androidDirectory 'app\eas-keystore.jks'
-    Copy-Item -LiteralPath $keystoreSource -Destination $keystoreDestination -Force
-
-    $escapeGroovyValue = {
-      param([string]$value)
-      return $value.Replace('\', '\\').Replace("'", "\'")
+    if (-not (Test-Path $keystoreSource)) {
+      throw "EAS Android keystore is missing from the project-local build environment."
     }
-    $keystorePassword = & $escapeGroovyValue $keystoreConfiguration.keystorePassword
-    $keyAlias = & $escapeGroovyValue $keystoreConfiguration.keyAlias
+    $legacyKeystoreCopy = Join-Path $androidDirectory 'app\eas-keystore.jks'
+    if (Test-Path $legacyKeystoreCopy) {
+      Remove-Item -LiteralPath $legacyKeystoreCopy -Force
+    }
+
     $keyPasswordValue = if ([string]::IsNullOrEmpty($keystoreConfiguration.keyPassword)) {
       $keystoreConfiguration.keystorePassword
     } else {
       $keystoreConfiguration.keyPassword
     }
-    $keyPassword = & $escapeGroovyValue $keyPasswordValue
+    $env:DUDU_RELEASE_STORE_FILE = $keystoreSource
+    $env:DUDU_RELEASE_STORE_PASSWORD = $keystoreConfiguration.keystorePassword
+    $env:DUDU_RELEASE_KEY_ALIAS = $keystoreConfiguration.keyAlias
+    $env:DUDU_RELEASE_KEY_PASSWORD = $keyPasswordValue
 
     $appBuildGradlePath = Join-Path $androidDirectory 'app\build.gradle'
     $appBuildGradle = [IO.File]::ReadAllText($appBuildGradlePath)
@@ -76,10 +78,10 @@ try {
       param($match)
       $releaseSigningConfiguration = @"
         release {
-            storeFile file('eas-keystore.jks')
-            storePassword '$keystorePassword'
-            keyAlias '$keyAlias'
-            keyPassword '$keyPassword'
+            storeFile file(System.getenv('DUDU_RELEASE_STORE_FILE'))
+            storePassword System.getenv('DUDU_RELEASE_STORE_PASSWORD')
+            keyAlias System.getenv('DUDU_RELEASE_KEY_ALIAS')
+            keyPassword System.getenv('DUDU_RELEASE_KEY_PASSWORD')
         }
 "@
       return $match.Groups[1].Value + $releaseSigningConfiguration + "`n" + $match.Groups[2].Value
@@ -118,5 +120,16 @@ try {
 
   Write-Output "APK ready: $outputApk"
 } finally {
+  if ($Variant -eq 'release') {
+    # Release builds must not leave generated signing material outside the project-local toolchain.
+    $generatedDebugKeystore = Join-Path $projectRoot 'android\app\debug.keystore'
+    if (Test-Path $generatedDebugKeystore) {
+      Remove-Item -LiteralPath $generatedDebugKeystore -Force
+    }
+  }
+  Remove-Item Env:DUDU_RELEASE_STORE_FILE -ErrorAction SilentlyContinue
+  Remove-Item Env:DUDU_RELEASE_STORE_PASSWORD -ErrorAction SilentlyContinue
+  Remove-Item Env:DUDU_RELEASE_KEY_ALIAS -ErrorAction SilentlyContinue
+  Remove-Item Env:DUDU_RELEASE_KEY_PASSWORD -ErrorAction SilentlyContinue
   Pop-Location
 }

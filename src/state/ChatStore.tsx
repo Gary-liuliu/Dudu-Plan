@@ -56,6 +56,7 @@ function createMessageId(): string {
 export function ChatStoreProvider({ children }: { children: ReactNode }) {
   const { session, getAccessToken } = useAccountStore();
   const realtime = useRealtimeStore();
+  const sendRealtimeChatMessage = realtime.sendChatMessage;
   const [hydrated, setHydrated] = useState(false);
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -217,7 +218,7 @@ export function ChatStoreProvider({ children }: { children: ReactNode }) {
   }, [realtime.chatError, replaceMessages]);
 
   const sendStoredMessage = useCallback((message: ChatMessage) => {
-    const accepted = realtime.sendChatMessage({
+    const accepted = sendRealtimeChatMessage({
       messageId: message.messageId,
       messageType: message.messageType,
       content: message.content ?? '',
@@ -225,7 +226,9 @@ export function ChatStoreProvider({ children }: { children: ReactNode }) {
       clientCreatedAt: message.clientCreatedAt,
     });
     if (accepted) {
-      sendAttemptAtRef.current.set(message.messageId, Date.now());
+      if (!sendAttemptAtRef.current.has(message.messageId)) {
+        sendAttemptAtRef.current.set(message.messageId, Date.now());
+      }
     } else {
       sendAttemptAtRef.current.delete(message.messageId);
     }
@@ -233,7 +236,7 @@ export function ChatStoreProvider({ children }: { children: ReactNode }) {
       candidate.messageId === message.messageId
         ? { ...candidate, localState: accepted ? 'sending' : 'failed' }
         : candidate));
-  }, [realtime, replaceMessages]);
+  }, [replaceMessages, sendRealtimeChatMessage]);
 
   useEffect(() => {
     const timer = setInterval(() => {
@@ -295,15 +298,15 @@ export function ChatStoreProvider({ children }: { children: ReactNode }) {
   }, [sendStoredMessage]);
 
   useEffect(() => {
-    if (!realtime.chatReady) {
+    if (!hydrated || !realtime.chatReady) {
       return;
     }
     for (const message of messagesRef.current) {
-      if (message.id === null && message.localState && message.content) {
+      if (message.id === null && message.localState === 'sending' && message.content) {
         sendStoredMessage(message);
       }
     }
-  }, [realtime.chatReady, sendStoredMessage]);
+  }, [hydrated, realtime.chatReady, sendStoredMessage]);
 
   const recallMessage = useCallback(async (messageId: string) => {
     const accessToken = await getAccessToken();

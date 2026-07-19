@@ -587,7 +587,9 @@ export function WorkoutScreen() {
           tone="coral"
           testID="start-workout"
         />
-        <Text style={styles.startHint}>哑铃重量按单只记录；出现不适立即停止。</Text>
+        <Text style={styles.startHint}>
+          全套仅需地面、哑铃、臂力棒和靠墙防滑的稳固椅；哑铃重量按单只记录，出现不适立即停止。
+        </Text>
       </View>
     </ScrollView>
   );

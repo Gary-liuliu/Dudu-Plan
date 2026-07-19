@@ -10,6 +10,7 @@ import {
 } from 'react';
 
 import {
+  AccountApiError,
   getLoginErrorMessage,
   loginAccount,
   refreshAccount,
@@ -28,7 +29,7 @@ interface AccountStoreValue {
   session: AuthSession | null;
   login: (username: string, password: string) => Promise<void>;
   logout: () => Promise<void>;
-  getAccessToken: () => Promise<string | null>;
+  getAccessToken: (forceRefresh?: boolean) => Promise<string | null>;
 }
 
 const AccountStoreContext = createContext<AccountStoreValue | null>(null);
@@ -40,16 +41,33 @@ export function AccountStoreProvider({ children }: { children: ReactNode }) {
   const [error, setError] = useState<string | null>(null);
   const [session, setSession] = useState<AuthSession | null>(null);
   const sessionRef = useRef<AuthSession | null>(null);
+  const sessionGenerationRef = useRef(0);
+  const sessionWriteRef = useRef<Promise<void>>(Promise.resolve());
   const refreshPromiseRef = useRef<Promise<string | null> | null>(null);
 
   const replaceSession = useCallback(async (nextSession: AuthSession | null) => {
-    if (nextSession) {
-      await saveAuthSession(nextSession);
-    } else {
-      await clearAuthSession();
-    }
+    const previousSession = sessionRef.current;
+    const generation = sessionGenerationRef.current + 1;
+    sessionGenerationRef.current = generation;
     sessionRef.current = nextSession;
-    setSession(nextSession);
+
+    const write = sessionWriteRef.current
+      .catch(() => undefined)
+      .then(() => nextSession ? saveAuthSession(nextSession) : clearAuthSession());
+    sessionWriteRef.current = write.catch(() => undefined);
+
+    try {
+      await write;
+    } catch (writeError) {
+      if (sessionGenerationRef.current === generation) {
+        sessionRef.current = previousSession;
+        setSession(previousSession);
+      }
+      throw writeError;
+    }
+    if (sessionGenerationRef.current === generation) {
+      setSession(nextSession);
+    }
   }, []);
 
   useEffect(() => {
@@ -85,13 +103,13 @@ export function AccountStoreProvider({ children }: { children: ReactNode }) {
     await replaceSession(null);
   }, [replaceSession]);
 
-  const getAccessToken = useCallback(async (): Promise<string | null> => {
+  const getAccessToken = useCallback(async (forceRefresh = false): Promise<string | null> => {
     const currentSession = sessionRef.current;
     if (!currentSession) {
       return null;
     }
 
-    if (currentSession.accessTokenExpiresAt > Date.now() + 30_000) {
+    if (!forceRefresh && currentSession.accessTokenExpiresAt > Date.now() + 30_000) {
       return currentSession.accessToken;
     }
 
@@ -101,13 +119,22 @@ export function AccountStoreProvider({ children }: { children: ReactNode }) {
     }
 
     if (!refreshPromiseRef.current) {
+      const sessionBeingRefreshed = currentSession;
       refreshPromiseRef.current = refreshAccount(currentSession.refreshToken)
         .then(async (refreshedSession) => {
+          if (sessionRef.current !== sessionBeingRefreshed) {
+            return null;
+          }
           await replaceSession(refreshedSession);
           return refreshedSession.accessToken;
         })
-        .catch(async () => {
-          await replaceSession(null);
+        .catch(async (refreshError) => {
+          if (sessionRef.current !== sessionBeingRefreshed) {
+            return null;
+          }
+          if (refreshError instanceof AccountApiError && refreshError.code === 'unauthorized') {
+            await replaceSession(null);
+          }
           return null;
         })
         .finally(() => {

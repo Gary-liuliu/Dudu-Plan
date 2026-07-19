@@ -95,11 +95,42 @@ function sortCompletedSessions(sessions: WorkoutSession[]): WorkoutSession[] {
     });
 }
 
+function formatDisconnectReason(code: number | null, reason: string): string {
+  const reasonLabels: Record<string, string> = {
+    access_token_unavailable: '登录凭证不可用',
+    authentication_failed: '认证失效',
+    authentication_timeout: '认证超时',
+    connection_timeout: '连接超时',
+    role_mismatch: '账号角色不匹配',
+    token_refresh_unavailable: '登录凭证刷新失败',
+    websocket_closed: '连接已关闭',
+    websocket_create_failed: '无法创建连接',
+    websocket_error: '网络连接错误',
+  };
+  const codeLabels: Record<number, string> = {
+    1_006: '网络异常断开',
+    1_009: '消息过大',
+    4_001: '同账号连接被替换',
+    4_002: '认证超时',
+    4_003: '认证失效',
+    4_004: '账号角色不匹配',
+    4_500: '服务端发送超时',
+  };
+  const normalizedReason = reason.trim();
+  const codeLabel = code === null ? undefined : codeLabels[code];
+  return codeLabel ?? reasonLabels[normalizedReason] ?? (normalizedReason || '未提供原因');
+}
+
 // [Function] 展示完成训练的月历与历史。[Warning] 日期统一归属到 startedAt 对应的本地自然日。
 export function ProgressScreen() {
   const { data, updateProfile } = useAppStore();
   const { logout, session } = useAccountStore();
-  const { observerConnected } = useRealtimeStore();
+  const {
+    connectionState,
+    lastDisconnect,
+    observerConnected,
+    reconnectCount,
+  } = useRealtimeStore();
   const [displayedMonth, setDisplayedMonth] = useState(
     () => new Date(new Date().getFullYear(), new Date().getMonth(), 1, 12),
   );
@@ -131,6 +162,22 @@ export function ProgressScreen() {
     ? completedSessions.filter((session) => getSessionLocalDateKey(session) === selectedDateKey)
     : completedSessions.slice(0, 8);
   const workoutStartMinutes = data.profile.workoutHour * 60 + data.profile.workoutMinute;
+  const connectionLabel = connectionState === 'online'
+    ? '在线'
+    : connectionState === 'connecting'
+      ? '连接中'
+      : '离线';
+  const connectionColor = connectionState === 'online'
+    ? colors.teal
+    : connectionState === 'connecting'
+      ? colors.yellow
+      : colors.inkMuted;
+  const lastDisconnectLabel = lastDisconnect
+    ? `${lastDisconnect.code ?? '无关闭码'} / ${formatDisconnectReason(
+        lastDisconnect.code,
+        lastDisconnect.reason,
+      )}`
+    : '暂无';
 
   const changeMonth = (offset: number) => {
     setDisplayedMonth(
@@ -359,12 +406,15 @@ export function ProgressScreen() {
 
               <View style={styles.accountRow}>
                 <View style={styles.accountIcon}>
-                  <Radio color={observerConnected ? colors.teal : colors.inkMuted} size={21} strokeWidth={2.3} />
+                  <Radio color={connectionColor} size={21} strokeWidth={2.3} />
                 </View>
                 <View style={styles.reminderCopy}>
                   <Text style={styles.reminderTitle}>{session?.accountName ?? '嘟嘟'}</Text>
                   <Text style={styles.reminderText}>
-                    {observerConnected ? '肚肚已连接' : '肚肚未连接'}
+                    本机{connectionLabel} · 肚肚{observerConnected ? '已连接' : '未连接'}
+                  </Text>
+                  <Text selectable style={styles.connectionDiagnosticText}>
+                    最近断线：{lastDisconnectLabel} · 当前登录重连 {reconnectCount} 次
                   </Text>
                 </View>
                 <IconButton
@@ -660,6 +710,13 @@ const styles = StyleSheet.create({
     color: colors.inkMuted,
     fontSize: 11,
     lineHeight: 16,
+    letterSpacing: 0,
+  },
+  connectionDiagnosticText: {
+    marginTop: 2,
+    color: colors.inkMuted,
+    fontSize: 10,
+    lineHeight: 14,
     letterSpacing: 0,
   },
   pressed: {
