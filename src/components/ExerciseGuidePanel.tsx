@@ -31,8 +31,15 @@ interface ExerciseGuideThumbnailProps {
 
 interface ExerciseGuidePanelProps {
   guide: ExerciseGuide;
+  showMedia?: boolean;
   tip?: string;
   warning?: string;
+  testID?: string;
+}
+
+interface ExerciseGuideMediaProps {
+  guide: ExerciseGuide;
+  showStepsHint?: boolean;
   testID?: string;
 }
 
@@ -81,13 +88,12 @@ function GuideSection({
   );
 }
 
-// [Function] 展示当前模板版本的动作教程。[Warning] 近似媒体必须同时展示姿势差异说明。
-export const ExerciseGuidePanel = memo(function ExerciseGuidePanel({
+// [Function] 展示动作媒体。[Warning] 近似媒体必须先展示姿势差异，不能默认播放。
+export const ExerciseGuideMedia = memo(function ExerciseGuideMedia({
   guide,
-  tip,
-  warning,
+  showStepsHint = false,
   testID,
-}: ExerciseGuidePanelProps) {
+}: ExerciseGuideMediaProps) {
   const media = guide.mediaKey ? exerciseMediaByKey[guide.mediaKey] : undefined;
   const [showAnimation, setShowAnimation] = useState(false);
   const [gifFailed, setGifFailed] = useState(false);
@@ -115,7 +121,7 @@ export const ExerciseGuidePanel = memo(function ExerciseGuidePanel({
   }, [guide.mediaMatch]);
 
   return (
-    <View style={styles.root} testID={testID}>
+    <View testID={testID}>
       {media ? (
         <View style={styles.mediaCard}>
           {guide.mediaNote ? (
@@ -196,9 +202,25 @@ export const ExerciseGuidePanel = memo(function ExerciseGuidePanel({
           <View style={styles.noMediaCopy}>
             <Text style={styles.noMediaTitle}>暂无匹配动画</Text>
             <Text selectable style={styles.noMediaText}>{guide.mediaUnavailableReason}</Text>
+            {showStepsHint ? <Text style={styles.noMediaHint}>可展开下方“动作示范与步骤”查看做法</Text> : null}
           </View>
         </View>
       )}
+    </View>
+  );
+});
+
+// [Function] 展示当前模板版本的动作教程。[Warning] 可隐藏媒体以避免同一 GIF 重复挂载。
+export const ExerciseGuidePanel = memo(function ExerciseGuidePanel({
+  guide,
+  showMedia = true,
+  tip,
+  warning,
+  testID,
+}: ExerciseGuidePanelProps) {
+  return (
+    <View style={styles.root} testID={testID}>
+      {showMedia ? <ExerciseGuideMedia guide={guide} testID={`${testID ?? guide.id}-guide-media`} /> : null}
 
       <View style={styles.muscleRow}>
         {guide.primaryMuscles.map((muscle) => (
@@ -391,6 +413,13 @@ const styles = StyleSheet.create({
   noMediaText: {
     color: colors.inkMuted,
     fontSize: 12,
+    lineHeight: 18,
+  },
+  noMediaHint: {
+    marginTop: 4,
+    color: colors.blue,
+    fontSize: 12,
+    fontWeight: '800',
     lineHeight: 18,
   },
   thumbnail: {

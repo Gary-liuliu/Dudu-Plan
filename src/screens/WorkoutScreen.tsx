@@ -25,7 +25,11 @@ import {
   View,
 } from 'react-native';
 
-import { ExerciseGuidePanel, ExerciseGuideThumbnail } from '../components/ExerciseGuidePanel';
+import {
+  ExerciseGuideMedia,
+  ExerciseGuidePanel,
+  ExerciseGuideThumbnail,
+} from '../components/ExerciseGuidePanel';
 import { NumericStepper } from '../components/NumericStepper';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { ProgressBar } from '../components/ProgressBar';
@@ -393,6 +397,17 @@ function ActiveWorkout({ session }: ActiveWorkoutProps) {
           <Text style={styles.exerciseRirHint}>RIR 1-3 · 每组保留 1-3 次余力</Text>
         </View>
 
+        {exerciseGuide ? (
+          <View style={styles.activeExerciseMedia}>
+            <ExerciseGuideMedia
+              guide={exerciseGuide}
+              key={exerciseGuide.id}
+              showStepsHint
+              testID={`active-exercise-media-${exercise.id}`}
+            />
+          </View>
+        ) : null}
+
         <View style={[styles.suggestionBand, suggestion.tone === 'increase' && styles.suggestionIncrease, suggestion.tone === 'recover' && styles.suggestionRecover]}>
           <Sparkles
             color={suggestion.tone === 'recover' ? colors.danger : suggestion.tone === 'increase' ? colors.teal : colors.purple}
@@ -432,6 +447,7 @@ function ActiveWorkout({ session }: ActiveWorkoutProps) {
                 <ExerciseGuidePanel
                   guide={exerciseGuide}
                   key={exerciseGuide.id}
+                  showMedia={false}
                   tip={exercise.tip}
                   warning={exercise.warning}
                   testID={`active-exercise-guide-${exercise.id}`}
@@ -785,6 +801,10 @@ const styles = StyleSheet.create({
     fontSize: 11,
     lineHeight: 17,
     letterSpacing: 0,
+  },
+  activeExerciseMedia: {
+    marginHorizontal: 20,
+    marginTop: 16,
   },
   suggestionBand: {
     marginHorizontal: 20,
