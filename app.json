@@ -3,7 +3,7 @@
     "name": "嘟嘟计划",
     "slug": "dudu-plan",
     "owner": "egokaka",
-    "version": "1.2.6",
+    "version": "1.2.7",
     "orientation": "portrait",
     "icon": "./assets/icon-dudu.png",
     "scheme": "dudu-plan",
@@ -16,14 +16,15 @@
           "defaultChannel": "workout-reminders"
         }
       ],
-      "expo-secure-store"
+      "expo-secure-store",
+      "expo-image"
     ],
     "ios": {
       "supportsTablet": false
     },
     "android": {
       "package": "com.duduplan.app",
-      "versionCode": 10,
+      "versionCode": 11,
       "permissions": [
         "SCHEDULE_EXACT_ALARM"
       ],

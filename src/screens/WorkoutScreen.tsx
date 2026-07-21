@@ -25,12 +25,18 @@ import {
   View,
 } from 'react-native';
 
+import { ExerciseGuidePanel, ExerciseGuideThumbnail } from '../components/ExerciseGuidePanel';
 import { NumericStepper } from '../components/NumericStepper';
 import { PrimaryButton } from '../components/PrimaryButton';
 import { ProgressBar } from '../components/ProgressBar';
 import { RestTimerBanner } from '../components/RestTimerBanner';
 import { ScreenHeader } from '../components/ScreenHeader';
-import { workoutTemplates, getWorkoutTemplate } from '../data/workoutPlan';
+import { getExerciseGuide } from '../data/exerciseGuides';
+import {
+  CURRENT_WORKOUT_TEMPLATE_VERSION,
+  getWorkoutTemplate,
+  workoutTemplates,
+} from '../data/workoutPlan';
 import {
   formatWorkoutDurationClock,
   getLocalDateKey,
@@ -235,6 +241,7 @@ function ActiveWorkout({ session }: ActiveWorkoutProps) {
   const template = getWorkoutTemplate(session.kind, session.templateVersion ?? 1);
   const exerciseIndex = Math.min(session.currentExerciseIndex, template.exercises.length - 1);
   const exercise = template.exercises[exerciseIndex];
+  const exerciseGuide = getExerciseGuide(exercise.id, session.templateVersion ?? 1);
   const exerciseLog = session.exerciseLogs.find((log) => log.exerciseId === exercise.id);
   const completedSets = session.exerciseLogs.reduce(
     (sum, log) => sum + log.sets.filter((setLog) => setLog.completed).length,
@@ -400,30 +407,44 @@ function ActiveWorkout({ session }: ActiveWorkoutProps) {
           </View>
         </View>
 
-        <Pressable
-          accessibilityRole="button"
-          accessibilityState={{ expanded: showTechnique }}
-          onPress={() => setShowTechnique((visible) => !visible)}
-          style={({ pressed }) => [styles.techniqueBand, pressed && styles.pressed]}
-        >
-          <View style={styles.techniqueHeader}>
+        <View style={styles.techniqueBand}>
+          <Pressable
+            accessibilityRole="button"
+            accessibilityState={{ expanded: showTechnique }}
+            onPress={() => setShowTechnique((visible) => !visible)}
+            style={({ pressed }) => [styles.techniqueHeaderButton, pressed && styles.pressed]}
+          >
             <View style={styles.techniqueTitleRow}>
               <Info color={colors.blue} size={18} strokeWidth={2.3} />
-              <Text style={styles.techniqueTitle}>动作要点</Text>
+              <Text style={styles.techniqueTitle}>
+                {exerciseGuide ? '动作示范与步骤' : '动作要点'}
+              </Text>
             </View>
             {showTechnique ? (
               <ChevronUp color={colors.inkMuted} size={18} strokeWidth={2.3} />
             ) : (
               <ChevronDown color={colors.inkMuted} size={18} strokeWidth={2.3} />
             )}
-          </View>
+          </Pressable>
           {showTechnique ? (
             <View style={styles.techniqueCopy}>
-              <Text style={styles.techniqueText}>{exercise.tip}</Text>
-              {exercise.warning ? <Text style={styles.warningText}>{exercise.warning}</Text> : null}
+              {exerciseGuide ? (
+                <ExerciseGuidePanel
+                  guide={exerciseGuide}
+                  key={exerciseGuide.id}
+                  tip={exercise.tip}
+                  warning={exercise.warning}
+                  testID={`active-exercise-guide-${exercise.id}`}
+                />
+              ) : (
+                <>
+                  <Text style={styles.techniqueText}>{exercise.tip}</Text>
+                  {exercise.warning ? <Text style={styles.warningText}>{exercise.warning}</Text> : null}
+                </>
+              )}
             </View>
           ) : null}
-        </Pressable>
+        </View>
 
         <View style={styles.setList}>
           {exerciseLog.sets.map((setLog) => (
@@ -501,6 +522,7 @@ function ActiveWorkout({ session }: ActiveWorkoutProps) {
 // [Function] 展示今日计划或接管进行中的训练。[Warning] 补练不会改变固定周计划。
 export function WorkoutScreen() {
   const { data, activeSession, startWorkout } = useAppStore();
+  const [expandedPlanExerciseId, setExpandedPlanExerciseId] = useState<string | null>(null);
   const [selectedKind, setSelectedKind] = useState<WorkoutKind>(() => {
     const state = getTodayWorkoutState(new Date(), data.sessions, data.profile);
     return state.template?.kind ?? 'upper-a';
@@ -545,7 +567,10 @@ export function WorkoutScreen() {
               accessibilityRole="radio"
               accessibilityState={{ selected }}
               key={template.kind}
-              onPress={() => setSelectedKind(template.kind)}
+              onPress={() => {
+                setSelectedKind(template.kind);
+                setExpandedPlanExerciseId(null);
+              }}
               style={({ pressed }) => [
                 styles.planTab,
                 selected && { backgroundColor: template.accent, borderColor: template.accent },
@@ -562,19 +587,56 @@ export function WorkoutScreen() {
         {selectedExerciseSections.map((section) => (
           <View key={section.key} style={styles.planExerciseSection}>
             <Text style={styles.planSectionTitle}>{section.label}</Text>
-            {section.exercises.map(({ exercise, index }) => (
-              <View key={exercise.id} style={styles.planExerciseRow}>
-                <View style={[styles.planExerciseIndex, { backgroundColor: `${selectedTemplate.accent}18` }]}>
-                  <Text style={[styles.planExerciseIndexText, { color: selectedTemplate.accent }]}>{index + 1}</Text>
+            {section.exercises.map(({ exercise, index }) => {
+              const guide = getExerciseGuide(exercise.id, CURRENT_WORKOUT_TEMPLATE_VERSION);
+              const expanded = expandedPlanExerciseId === exercise.id;
+
+              return (
+                <View key={exercise.id} style={styles.planExerciseItem}>
+                  <Pressable
+                    accessibilityHint={expanded ? '收起动作说明' : '查看动作示范和分步骤说明'}
+                    accessibilityLabel={`${exercise.name}，${exercise.sets}组，每组${exercise.repMin}到${exercise.repMax}${exercise.repUnit}${exercise.isPerSide ? '每侧' : ''}，${exercise.focus}`}
+                    accessibilityRole="button"
+                    accessibilityState={{ expanded }}
+                    onPress={() => setExpandedPlanExerciseId(expanded ? null : exercise.id)}
+                    style={({ pressed }) => [
+                      styles.planExerciseRow,
+                      expanded && styles.planExerciseRowExpanded,
+                      pressed && styles.pressed,
+                    ]}
+                    testID={`exercise-row-${exercise.id}`}
+                  >
+                    <View style={[styles.planExerciseIndex, { backgroundColor: `${selectedTemplate.accent}18` }]}>
+                      <Text style={[styles.planExerciseIndexText, { color: selectedTemplate.accent }]}>{index + 1}</Text>
+                    </View>
+                    {guide ? <ExerciseGuideThumbnail guide={guide} /> : null}
+                    <View style={styles.planExerciseCopy}>
+                      <Text style={styles.planExerciseName}>{exercise.name}</Text>
+                      <Text style={styles.planExerciseMeta}>
+                        {exercise.sets} × {exercise.repMin}-{exercise.repMax}{exercise.repUnit}{exercise.isPerSide ? '/侧' : ''} · {exercise.focus}
+                        {guide?.mediaKey ? ' · 图 © Gym visual' : ''}
+                        {guide?.mediaMatch === 'adapted' ? ' · 示范有调整' : ''}
+                      </Text>
+                    </View>
+                    {expanded ? (
+                      <ChevronUp color={colors.inkMuted} size={18} strokeWidth={2.3} />
+                    ) : (
+                      <ChevronDown color={colors.inkMuted} size={18} strokeWidth={2.3} />
+                    )}
+                  </Pressable>
+                  {expanded && guide ? (
+                    <View style={styles.planExerciseDetail}>
+                      <ExerciseGuidePanel
+                        guide={guide}
+                        tip={exercise.tip}
+                        warning={exercise.warning}
+                        testID={`exercise-detail-${exercise.id}`}
+                      />
+                    </View>
+                  ) : null}
                 </View>
-                <View style={styles.planExerciseCopy}>
-                  <Text style={styles.planExerciseName}>{exercise.name}</Text>
-                  <Text style={styles.planExerciseMeta}>
-                    {exercise.sets} × {exercise.repMin}-{exercise.repMax}{exercise.repUnit}{exercise.isPerSide ? '/侧' : ''} · {exercise.focus}
-                  </Text>
-                </View>
-              </View>
-            ))}
+              );
+            })}
           </View>
         ))}
       </View>
@@ -766,7 +828,8 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     backgroundColor: colors.softBlue,
   },
-  techniqueHeader: {
+  techniqueHeaderButton: {
+    minHeight: 44,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -1055,6 +1118,10 @@ const styles = StyleSheet.create({
   planExerciseSection: {
     gap: 2,
   },
+  planExerciseItem: {
+    borderBottomColor: colors.line,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
   planSectionTitle: {
     marginBottom: 4,
     color: colors.ink,
@@ -1068,8 +1135,12 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 11,
-    borderBottomColor: colors.line,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  planExerciseRowExpanded: {
+    paddingBottom: 8,
+  },
+  planExerciseDetail: {
+    paddingBottom: 16,
   },
   planExerciseIndex: {
     height: 38,
